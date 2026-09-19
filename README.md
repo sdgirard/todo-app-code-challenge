@@ -2,7 +2,7 @@
 
 A to-do list application built for the Foci Solutions take-home coding challenge. See [`docs/requirements/requirements.md`](docs/requirements/requirements.md) for the full assignment.
 
-**Status:** In planning/design. Architecture and standards are fully specced (see [Documentation Map](#documentation-map) below); application code has not been written yet.
+**Status:** Backend project skeleton scaffolded (`TodoApi.Gateway` + `TodoApi.Todos`, builds and tests run, no feature endpoints yet). Frontend not yet scaffolded. Architecture and standards are fully specced — see [Documentation Map](#documentation-map) below.
 
 ## Stack
 
@@ -14,14 +14,23 @@ See [`docs/architecture/overview-architecture.md`](docs/architecture/overview-ar
 
 ## Build & Run
 
-**TODO — not yet available.** No application code exists yet; this section will be filled in once the backend and frontend projects are scaffolded. Planned shape, per the architecture docs:
+**Backend:** project skeleton exists (`TodoApi.Gateway` + `TodoApi.Todos`, no feature endpoints yet).
 
-- Backend: `dotnet run` from `backend/src/TodoApi.Gateway/` (ASP.NET Core Minimal API, EF Core migrations auto-applied at startup against a local SQLite file)
-- Frontend: `npm install && npm run dev` from `frontend/` (Vite dev server)
+- Build: `dotnet build` from `backend/`
+- Run: `dotnet run --project backend/src/TodoApi.Gateway/` (serves HTTPS-only, per [`docs/infra/deployment.md`](docs/infra/deployment.md); the OpenAPI spec regenerates to `backend/src/TodoApi.Gateway/openapi.json` on every build)
+- Interactive API UI (Development only): `https://localhost:7020/scalar` via [Scalar](https://github.com/scalar/scalar) — raw spec served alongside it at `/openapi/v1.json`. See [`docs/architecture/backend/overview.md#interactive-ui-for-manual-testing`](docs/architecture/backend/overview.md#interactive-ui-for-manual-testing) for why Scalar.
+
+**Frontend:** **TODO — not yet available.** Not yet scaffolded. Planned: `npm install && npm run dev` from `frontend/` (Vite dev server).
 
 ## Running Tests
 
-**TODO — not yet available.** No tests exist yet. Testing strategy (per-layer approach: service tier, CQRS handlers, repository) is still an open item — see [`docs/architecture/backend/overview.md`](docs/architecture/backend/overview.md) Open Questions.
+**Backend:** test project skeleton exists (`TodoApi.Todos.Tests`, `TodoApi.Gateway.Tests`), no tests written yet.
+
+- Run: `dotnet test` from `backend/`
+
+Testing strategy (per-layer approach: service tier, CQRS handlers, repository) is still an open item — see [`docs/architecture/backend/overview.md`](docs/architecture/backend/overview.md) Open Questions.
+
+**Frontend:** **TODO — not yet available.**
 
 ## Design Choices
 
@@ -35,7 +44,7 @@ Full rationale for every architectural decision lives under [`docs/`](docs/) —
 - **DTOs never cross below the service tier** — the service tier validates the incoming DTO and maps it to a domain Model; everything below (CQRS handlers, repository, persistence) only ever sees Models. Mapping is via Mapster's source generator (`Mapster.SourceGenerator`), not AutoMapper (licensing) and not Mapster's default runtime-reflection mode.
 - **Persistence: EF Core + SQLite** — a deliberate choice beyond the requirements' "file-based or in-memory is sufficient" minimum, to demonstrate real ORM usage. See [`docs/architecture/backend/overview.md#persistence`](docs/architecture/backend/overview.md#persistence).
 - **Error responses:** RFC 9457 Problem Details, ASP.NET Core's built-in convention — no custom error DTO.
-- **API contract:** OpenAPI spec generated at build time from endpoint metadata, committed to the repo, consumed by a generated TypeScript client (orval) on the frontend side. No hand-written API client.
+- **API contract:** OpenAPI spec generated at build time from endpoint metadata, committed to the repo, consumed by a generated TypeScript client (orval) on the frontend side. No hand-written API client. **Scalar** provides the interactive UI for manually exercising the API in Development (Swagger UI's replacement now that it's out of the default .NET template).
 
 **Frontend architecture:** doc not yet written — see [Documentation Map](#documentation-map).
 

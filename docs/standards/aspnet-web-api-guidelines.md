@@ -1,6 +1,10 @@
 # ASP.NET Core Web API Guidelines
 
-Status: draft, minimal set to start. Covers the backend described in [`../architecture/backend/overview.md`](../architecture/backend/overview.md) — **.NET 10**. Add to this as real decisions come up during implementation — this isn't meant to be exhaustive up front.
+Living doc — minimal set to start, extended as real decisions come up during implementation rather than written exhaustively up front. Covers the backend described in [`../architecture/backend/overview.md`](../architecture/backend/overview.md) — **.NET 10**.
+
+## Warnings as Errors
+
+All projects build with `TreatWarningsAsErrors` enabled, set once in `backend/Directory.Build.props` rather than per-project. A compiler warning is either a real problem or noise worth silencing at the point it's produced (`#pragma warning disable` with a comment explaining why, or a narrower fix) — leaving it as a warning means it's easy to accumulate and eventually miss the one that matters. No project should turn this off individually.
 
 ## Coding Style & Patterns
 

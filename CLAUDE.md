@@ -6,7 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 To-do list application built for the Foci Solutions take-home coding challenge. See [`docs/requirements/requirements.md`](docs/requirements/requirements.md) for the full assignment.
 
-Stack: ASP.NET Core Minimal API backend (.NET 10), React (Vite) + React Router frontend. No application code has been written yet — the repo currently contains only planning/architecture docs and CI scaffolding. This file will need build/test/lint commands added once the projects are scaffolded.
+Stack: ASP.NET Core Minimal API backend (.NET 10), React (Vite) + React Router frontend. Backend project skeleton exists under `backend/` (`TodoApi.Gateway` host + `TodoApi.Todos` feature library, plus test projects) — no feature endpoints yet. Frontend not yet scaffolded.
+
+## Backend Build/Test Commands
+
+- Build: `dotnet build` from `backend/`
+- Run: `dotnet run --project backend/src/TodoApi.Gateway/`
+- Test: `dotnet test` from `backend/`
+
+All projects build with `TreatWarningsAsErrors` (set in `backend/Directory.Build.props`) — see [`docs/standards/aspnet-web-api-guidelines.md`](docs/standards/aspnet-web-api-guidelines.md#warnings-as-errors).
 
 ## Keep README.md in Sync
 

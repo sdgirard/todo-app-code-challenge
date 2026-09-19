@@ -1,6 +1,6 @@
 # CQRS Without a Mediator Library
 
-Status: draft. Covers command/query dispatch for the backend described in [`overview.md`](./overview.md).
+Covers command/query dispatch for the backend described in [`overview.md`](./overview.md).
 
 ## Not using MediatR
 

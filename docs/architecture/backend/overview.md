@@ -1,6 +1,6 @@
-# Backend Architecture — Draft
+# Backend Architecture
 
-Status: draft, for review. Covers the ASP.NET Core Minimal API backend described in [`../overview-architecture.md`](../overview-architecture.md).
+Covers the ASP.NET Core Minimal API backend described in [`../overview-architecture.md`](../overview-architecture.md).
 
 **Target framework: .NET 10** (current LTS release).
 
@@ -21,7 +21,7 @@ Modular monolith: a thin **Gateway** host project references one **class library
 
 ```text
 backend/
-├── TodoApi.sln
+├── TodoApi.slnx                          # .slnx (XML), not the classic GUID-heavy .sln — diff-friendly
 ├── src/
 │   ├── TodoApi.Gateway/                  # thin host — API entry point, no feature logic
 │   │   ├── Program.cs
@@ -341,6 +341,10 @@ This was an open question sent to Foci (see [`../../requirements/requirements-qa
 ## API Contract / OpenAPI
 
 Endpoint metadata (`.WithName()`, `.WithSummary()`, request/response types) feeds `Microsoft.AspNetCore.OpenApi`'s spec generation directly — the OpenAPI spec is generated from the endpoints themselves, not maintained by hand. Generated at **build time** (via `Microsoft.Extensions.ApiDescription.Server`, not `Microsoft.AspNetCore.OpenApi`'s runtime-only default) into `TodoApi.Gateway/openapi.json`, committed to the repo. See [`../overview-architecture.md#api-contract--client-generation`](../overview-architecture.md#api-contract--client-generation) for the full spec-to-TypeScript-client pipeline (orval) and why build-time generation was chosen over serving the spec live.
+
+### Interactive UI for manual testing
+
+**Scalar** (`Scalar.AspNetCore`, `app.MapScalarApiReference()`), Development-only, served alongside the raw spec at `MapOpenApi()`. Chosen over Swashbuckle's Swagger UI: the project already uses the built-in `Microsoft.AspNetCore.OpenApi` generator (not Swashbuckle's), and Microsoft's own docs point to Scalar as the successor now that Swagger UI was dropped from the default .NET template — wiring in Swashbuckle just for its UI half would mean carrying a second, redundant spec generator. Gated to Development in `ConfigureApps` alongside `MapOpenApi()` — not exposed in the home-lab demo deployment.
 
 ## Related Docs
 
