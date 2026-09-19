@@ -19,6 +19,7 @@ See [`docs/architecture/overview-architecture.md`](docs/architecture/overview-ar
 - Build: `dotnet build` from `backend/`
 - Run: `dotnet run --project backend/src/TodoApi.Gateway/` (serves HTTPS-only, per [`docs/infra/deployment.md`](docs/infra/deployment.md); the OpenAPI spec regenerates to `backend/src/TodoApi.Gateway/openapi.json` on every build)
 - Interactive API UI (Development only): `https://localhost:7020/scalar` via [Scalar](https://github.com/scalar/scalar) — raw spec served alongside it at `/openapi/v1.json`. See [`docs/architecture/backend/overview.md#interactive-ui-for-manual-testing`](docs/architecture/backend/overview.md#interactive-ui-for-manual-testing) for why Scalar.
+- **Container:** `docker build -f docker/Dockerfile.gateway -t todo-app-gateway .` from the repo root. `docker build -f docker/Dockerfile.gateway --build-arg ENABLE_DEBUG=true -t todo-app-gateway:debug .` for a variant with `vsdbg` remote debugging. A second image for the frontend (`docker/Dockerfile.app`) is planned once `frontend/` is scaffolded — see [`docs/infra/dockerfile-organization.md`](docs/infra/dockerfile-organization.md). See [`docs/infra/container-image.md`](docs/infra/container-image.md) for the backend image's full design and [`docs/infra/harbor-registry-setup.md`](docs/infra/harbor-registry-setup.md) for pushing to the registry.
 
 **Frontend:** **TODO — not yet available.** Not yet scaffolded. Planned: `npm install && npm run dev` from `frontend/` (Vite dev server).
 
@@ -58,7 +59,7 @@ Key assumptions:
 
 - **Single-user, no auth** is the baseline (phase 1). Multi-user/auth is a stretch goal if time allows — see [`docs/architecture/authentication.md`](docs/architecture/authentication.md).
 - **Commit history** is squashed before pushing (feature-by-feature commits during development, squashed into a clean history before the branch is pushed) — not kept as raw WIP commits.
-- **TLS everywhere, from the start** — local dev uses ASP.NET Core's dev HTTPS cert; the demo deployment uses a Let's Encrypt cert for `foci-todo.thecameraeye.ca`.
+- **TLS everywhere, from the start, terminated by Kestrel itself (not the ingress)** — the cert (PFX, dev cert locally / Let's Encrypt for the demo) is mounted directly into the container and Kestrel does the handshake, so no hop (including ingress→pod, inside the cluster) is ever plaintext. Also keeps the door open for gRPC later without revisiting the TLS story. See [`docs/infra/container-image.md#tls-kestrel-terminates-it-directly`](docs/infra/container-image.md#tls-kestrel-terminates-it-directly).
 
 ## Trade-offs
 
@@ -89,8 +90,11 @@ This repo's design decisions are documented as they were made, not written up af
 
 **Infrastructure**
 
-- [`docs/infra/harbor-registry-setup.md`](docs/infra/harbor-registry-setup.md) — container registry setup (optional enhancement)
+- [`docs/infra/dockerfile-organization.md`](docs/infra/dockerfile-organization.md) — `docker/` layout for multiple Dockerfiles, per-service image naming, CI matrix build (optional enhancement)
+- [`docs/infra/container-image.md`](docs/infra/container-image.md) — backend (`todo-app-gateway`) container image design: Kestrel-terminated TLS, SQLite volume mount, cache-optimized build stages, multi-arch (`linux/amd64`+`linux/arm64`) build, `ENABLE_DEBUG` remote-debugging build arg (optional enhancement)
+- [`docs/infra/harbor-registry-setup.md`](docs/infra/harbor-registry-setup.md) — container registry setup, including Harbor's built-in (Trivy) vulnerability scanning (optional enhancement)
 - [`docs/infra/deployment.md`](docs/infra/deployment.md) — deployment target and TLS strategy
 - [`docs/infra/versioning.md`](docs/infra/versioning.md) — semantic version generation and CI wiring
+- [`docs/infra/outstanding-items.md`](docs/infra/outstanding-items.md) — deferred infra decisions tracked for later (resource limits, image scanning)
 
 **For AI agents working in this repo:** see [`CLAUDE.md`](CLAUDE.md).

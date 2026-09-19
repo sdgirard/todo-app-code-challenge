@@ -1,0 +1,113 @@
+# TodoApi.Gateway (backend) container image.
+# Design decisions and rationale: docs/infra/container-image.md — read that before changing this file.
+# Build context is the repo root (not docker/) — see docs/infra/dockerfile-organization.md.
+#
+# Build:
+#   docker build -f docker/Dockerfile.gateway -t todo-app-gateway .
+#   docker build -f docker/Dockerfile.gateway --build-arg ENABLE_DEBUG=true -t todo-app-gateway:debug .
+#
+# Multi-arch build/push (matches CI):
+#   docker buildx build -f docker/Dockerfile.gateway --platform linux/amd64,linux/arm64 -t docker.thecameraeye.ca/inhouse/todo-app-gateway:latest --push .
+
+# ---- Build stage -----------------------------------------------------------
+FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d AS build
+
+# Version info, passed by docker-publish.yml — see docs/infra/versioning.md.
+# Defaults keep a plain local `docker build` (no --build-arg) working; the
+# SDK's SourceLink integration would otherwise silently default Version to
+# "1.0.0" and still append the real +<commit>, which is confusing to read
+# from /version — passing these explicitly keeps the reported version
+# consistent with what generate-version.sh actually produced.
+ARG APP_VERSION=0.0.0-dev
+ARG APP_COMMIT_SHA=unknown
+ARG APP_BUILD_DATE=unknown
+
+WORKDIR /src
+
+# Copy only project files first so `dotnet restore` is its own cached layer —
+# it only re-runs when a .csproj/props file changes, not on every source edit.
+COPY backend/Directory.Build.props backend/
+COPY backend/src/TodoApi.Gateway/TodoApi.Gateway.csproj backend/src/TodoApi.Gateway/
+COPY backend/src/TodoApi.Todos/TodoApi.Todos.csproj backend/src/TodoApi.Todos/
+
+RUN dotnet restore backend/src/TodoApi.Gateway/TodoApi.Gateway.csproj
+
+# Now bring in the rest of the source — this layer changes on nearly every
+# build, so it's kept after the expensive restore step above.
+COPY backend/src/ backend/src/
+
+# Framework-dependent publish (default — no --self-contained): the runtime
+# stage below already ships the shared ASP.NET Core runtime, so a
+# self-contained publish would just duplicate it. --no-restore avoids
+# re-running restore, which already happened in its own cached layer above.
+# This is also where build-time OpenAPI spec generation
+# (OpenApiGenerateDocumentsOnBuild) runs as a side effect of publish.
+#
+# InformationalVersion is composed as "{version}+{commit}.{buildDate}" —
+# VersionEndpoint.cs (GET /version) parses this exact format back apart.
+RUN dotnet publish backend/src/TodoApi.Gateway/TodoApi.Gateway.csproj \
+    -c Release \
+    --no-restore \
+    -o /app/publish \
+    /p:Version=${APP_VERSION} \
+    /p:InformationalVersion="${APP_VERSION}+${APP_COMMIT_SHA}.${APP_BUILD_DATE}"
+
+# ---- Runtime stage ----------------------------------------------------------
+FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:6a94333d37514e385650a3c81a55e5350b67253dbe136e9cf17e499c35606a8c AS runtime
+
+# Set to "true" to layer on remote-debugging tooling (vsdbg) — see
+# docs/infra/container-image.md#remote-debugging-enable_debug-build-arg.
+# Defaults off; docker-publish.yml never passes this, so the published
+# image never carries debug tooling.
+ARG ENABLE_DEBUG=false
+
+WORKDIR /app
+
+# Conditionally install vsdbg + a few diagnostic packages, only when
+# ENABLE_DEBUG=true. Kept in one RUN so the debug-tooling layer doesn't
+# exist at all in a non-debug build, not just "installed then hidden".
+RUN if [ "${ENABLE_DEBUG}" = "true" ]; then \
+        apt-get update && \
+        apt-get install -y --no-install-recommends curl unzip procps lsof net-tools && \
+        curl -sSL https://aka.ms/getvsdbgsh | bash /dev/stdin -v latest -l /vsdbg && \
+        apt-get purge -y curl unzip && \
+        apt-get clean && \
+        rm -rf /var/lib/apt/lists/* && \
+        touch /tmp/debug_mode; \
+    fi
+
+COPY --from=build /app/publish .
+
+# Entrypoint wrapper: when ENABLE_DEBUG=true, force Development-mode
+# environment (Scalar UI, detailed errors) before exec'ing the real command.
+# Must end in `exec "$@"`, not a bare call — exec replaces the wrapper's own
+# process so SIGTERM reaches the dotnet process directly for a graceful
+# shutdown, rather than being swallowed by the wrapper script (PID 1).
+RUN printf '#!/bin/sh\nif [ -f /tmp/debug_mode ]; then\n  export ASPNETCORE_ENVIRONMENT=Development\n  export DOTNET_ENVIRONMENT=Development\nfi\nexec "$@"\n' > /app/entrypoint.sh && \
+    chmod +x /app/entrypoint.sh
+
+# Cert is mounted at runtime, never baked into the image — see
+# docs/infra/container-image.md#cert-mounting. The password is a secret and
+# is supplied via a mounted file (same Secret volume as the .pfx), not a
+# literal env var value — see docs/standards/aspnet-web-api-guidelines.md#secrets-management.
+ENV ASPNETCORE_URLS=https://+:8443 \
+    ASPNETCORE_Kestrel__Certificates__Default__Path=/certs/todo-app.pfx
+
+# SQLite file lives on a mounted volume (PVC in the home-lab cluster) so it
+# survives pod restarts — see docs/infra/container-image.md#persistence-sqlite-path-via-data.
+# Not declared as a Docker VOLUME (would create an anonymous volume on a
+# plain `docker run`); the mount point is a documented convention instead.
+ENV ConnectionStrings__TodoDb="Data Source=/data/todo.db"
+
+# vsdbg's conventional port — EXPOSE is metadata only, harmless to declare
+# even when ENABLE_DEBUG=false.
+EXPOSE 8443 4024
+
+# Non-root: the base image ships an unprivileged `app` user for this.
+# Chown before switching so vsdbg (if installed) and the app files are
+# both owned by the runtime user.
+RUN chown -R app:app /app && \
+    if [ -d /vsdbg ]; then chown -R app:app /vsdbg; fi
+USER app
+
+ENTRYPOINT ["/app/entrypoint.sh", "dotnet", "TodoApi.Gateway.dll"]

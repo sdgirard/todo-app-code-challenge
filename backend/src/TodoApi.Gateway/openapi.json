@@ -4,5 +4,55 @@
     "title": "TodoApi.Gateway | v1",
     "version": "1.0.0"
   },
-  "paths": { }
+  "paths": {
+    "/version": {
+      "get": {
+        "tags": [
+          "VersionEndpoint"
+        ],
+        "summary": "Reports the running application's version, commit, and build date",
+        "operationId": "GetVersion",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Response": {
+        "required": [
+          "version",
+          "commit",
+          "buildDate"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "buildDate": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "VersionEndpoint"
+    }
+  ]
 }

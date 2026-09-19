@@ -8,13 +8,13 @@ on:
 env:
   HARBOR_REGISTRY: docker.thecameraeye.ca
   HARBOR_PROJECT: inhouse
-  IMAGE_NAME: todo-app
 
 jobs:
   version:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.generate.outputs.version }}
+      build-date: ${{ steps.build-date.outputs.date }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,9 +25,30 @@ jobs:
         id: generate
         run: sh scripts/generate-version.sh
 
+      - name: Record build date
+        id: build-date
+        run: echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
   build-and-push:
     needs: version
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: todo-app-gateway
+            dockerfile: docker/Dockerfile.gateway
+            # .NET version-stamping args — see docs/infra/versioning.md and
+            # VersionEndpoint.cs (GET /version). Not applicable to
+            # docker/Dockerfile.app once it exists (different toolchain).
+            build_args: |
+              APP_VERSION=${{ needs.version.outputs.version }}
+              APP_COMMIT_SHA=${{ github.sha }}
+              APP_BUILD_DATE=${{ needs.version.outputs.build-date }}
+          # - image: todo-app-web
+          #   dockerfile: docker/Dockerfile.app
+          #   build_args: ""
+          # Uncomment once frontend/ and docker/Dockerfile.app exist — see
+          # docs/infra/dockerfile-organization.md.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,6 +60,9 @@ jobs:
           username: ${{ secrets.HARBOR_ROBOT_USERNAME }}
           password: ${{ secrets.HARBOR_ROBOT_TOKEN }}
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -46,17 +70,20 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
           push: true
+          build-args: ${{ matrix.build_args }}
           tags: |
-            ${{ env.HARBOR_REGISTRY }}/${{ env.HARBOR_PROJECT }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.HARBOR_REGISTRY }}/${{ env.HARBOR_PROJECT }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.HARBOR_REGISTRY }}/${{ env.HARBOR_PROJECT }}/${{ env.IMAGE_NAME }}:${{ needs.version.outputs.version }}
+            ${{ env.HARBOR_REGISTRY }}/${{ env.HARBOR_PROJECT }}/${{ matrix.image }}:latest
+            ${{ env.HARBOR_REGISTRY }}/${{ env.HARBOR_PROJECT }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ env.HARBOR_REGISTRY }}/${{ env.HARBOR_PROJECT }}/${{ matrix.image }}:${{ needs.version.outputs.version }}
           labels: |
             org.opencontainers.image.version=${{ needs.version.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
   version-tag:
     needs: [version, build-and-push]

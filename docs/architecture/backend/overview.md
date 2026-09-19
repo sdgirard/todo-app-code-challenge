@@ -117,9 +117,9 @@ Applied automatically at app startup (`dbContext.Database.Migrate()`, called fro
 
 ### Where the SQLite file lives
 
-For the home-lab Kubernetes demo deployment (see [`../../infra/deployment.md`](../../infra/deployment.md)), the SQLite file is written to a path backed by a **PersistentVolume**, not the container's own ephemeral filesystem — otherwise the to-do list would reset every time the pod restarts or redeploys. This needs a small addition to `deployment.md`'s still-TODO Cluster/Ingress section once that's worked out (a PVC mount and the connection string pointing at it).
+For the home-lab Kubernetes demo deployment (see [`../../infra/deployment.md`](../../infra/deployment.md)), the SQLite file is written to `/data/todo.db`, a path backed by a **PersistentVolume** mounted into the container, not the container's own ephemeral filesystem — otherwise the to-do list would reset every time the pod restarts or redeploys. The connection string is supplied via config/env (`ConnectionStrings__TodoDb=Data Source=/data/todo.db`), not hardcoded, so it can point at different paths per environment without a rebuild. Full detail (mount conventions, local-dev fallback) in [`../../infra/container-image.md#persistence-sqlite-path-via-data`](../../infra/container-image.md#persistence-sqlite-path-via-data). The PVC/StorageClass definition itself is still TODO in `deployment.md`'s Cluster/Ingress section.
 
-Locally, the file just lives on disk in the working directory (or a configured path) — no PVC needed outside the cluster.
+Locally, the file just lives on disk in the working directory (relative path, via `appsettings.Development.json`) — no PVC or mount needed outside the cluster.
 
 ## Mapping (DTO ⇄ Model)
 
@@ -351,5 +351,7 @@ Endpoint metadata (`.WithName()`, `.WithSummary()`, request/response types) feed
 - [`../overview-architecture.md`](../overview-architecture.md) — system-level overview, including the OpenAPI/client-generation pipeline
 - [`cqrs.md`](./cqrs.md) — CQRS pattern without a mediator library
 - [`../authentication.md`](../authentication.md) — auth is out of scope for phase 1; this doc assumes single-user
+- [`../../infra/container-image.md`](../../infra/container-image.md) — container image design, including the SQLite `/data` mount
+- [`../../infra/deployment.md`](../../infra/deployment.md) — TLS strategy, home-lab deployment target
 - [`../../requirements/requirements.md`](../../requirements/requirements.md) — source requirements
 - [`../../requirements/requirements-qa.md`](../../requirements/requirements-qa.md) — open questions sent to Foci

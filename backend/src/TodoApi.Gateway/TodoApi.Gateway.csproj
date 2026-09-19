@@ -24,6 +24,10 @@
     <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)</OpenApiDocumentsDirectory>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="TodoApi.Gateway.Tests" />
+  </ItemGroup>
+
   <!-- dotnet-getdocument always names its output "{ProjectName}.json"; rename to the
        committed contract filename documented in docs/architecture/backend/overview.md. -->
   <Target Name="RenameOpenApiDocument" AfterTargets="GenerateOpenApiDocuments">

@@ -93,6 +93,16 @@ Wiring:
 - Endpoints return `TypedResults.NotFound()`, `TypedResults.Problem(...)`, or `TypedResults.ValidationProblem(errors)` directly — these already produce RFC 9457-shaped bodies, no custom error DTO needed.
 - FluentValidation's ASP.NET Core integration feeds naturally into `TypedResults.ValidationProblem`.
 
+## Secrets Management
+
+Any sensitive value — certificate passwords, connection strings that carry credentials, API keys, anything that shouldn't be readable by someone with repo/image access — is supplied via a **mounted secrets file**, never as a literal value in an environment variable, `appsettings*.json`, or anywhere else in source control or the image itself.
+
+- **Never hardcode secrets** in `appsettings.json`/`appsettings.Production.json` or inline in code. These files hold structure and non-sensitive defaults (e.g. the `ConnectionStrings__TodoDb` *path*, which isn't sensitive) — not the sensitive values themselves.
+- **Never pass secret values as plain environment variable values** (e.g. `-e SOME_PASSWORD=hunter2` or a K8s `env:` entry with a literal `value:`) — env vars are visible via `docker inspect`, `/proc/<pid>/environ`, process listings, and are easy to accidentally log or leak into crash dumps.
+- **Secrets are supplied as mounted files**, sourced from a K8s `Secret` volume-mounted into the pod (e.g. the TLS `.pfx` and its password, see [`../infra/container-image.md#cert-mounting`](../infra/container-image.md#cert-mounting)), or an equivalent local-dev mechanism (`dotnet user-secrets`, or a gitignored local file) for running outside the cluster. ASP.NET Core's configuration system reads file-provider-backed configuration the same way it reads env vars, so this doesn't complicate call sites — `IConfiguration` still resolves the value, it's just backed by a mounted file instead of the process environment.
+- Where an env var is unavoidable for a *non-secret* setting that happens to configure where a secret lives (e.g. `ASPNETCORE_Kestrel__Certificates__Default__Path` pointing at the mounted `.pfx` file path), that's fine — the env var holds a path, not the secret material itself. The distinction is: does the env var's value need to stay confidential? If yes, it's a mounted file, not an env var.
+- This applies to local Docker runs too: mount a local secrets file/directory rather than passing `-e` with real values, even for local testing, so the habit doesn't diverge between environments.
+
 ## General .NET Conventions
 
 Beyond the above, follow standard [.NET / C# coding conventions](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/coding-conventions) and [ASP.NET Core best practices](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/best-practices) — naming, async/await usage, nullable reference types, etc. Not re-documenting those here; this doc only covers where we're being deliberate or opinionated beyond the defaults.
@@ -102,3 +112,4 @@ Beyond the above, follow standard [.NET / C# coding conventions](https://learn.m
 - [`../architecture/backend/overview.md`](../architecture/backend/overview.md) — backend architecture these standards apply to
 - [`../architecture/backend/cqrs.md`](../architecture/backend/cqrs.md) — CQRS pattern without a mediator library
 - [`../architecture/overview-architecture.md`](../architecture/overview-architecture.md) — system-level overview
+- [`../infra/container-image.md`](../infra/container-image.md) — container image design, including cert/secret mounting

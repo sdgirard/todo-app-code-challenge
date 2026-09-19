@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+.git/
+.github/
+docs/
+*.md
+
+# Frontend isn't part of this image yet (see docs/infra/container-image.md#scope-backend-only-for-now)
+frontend/
