@@ -5,7 +5,7 @@ Source: "Foci Solutions: Invitation to Take Home Coding Challenge" (email thread
 ## Overview
 
 - **Scenario:** Build a to-do list application that allows users to manage their tasks.
-- **Time expectation:** ~4-6 hours of focused effort.
+- **Time expectation:** ~4-6 hours of focused effort. Christine verbally noted during the interview that candidates have up to a month to complete the challenge given other commitments — no hard deadline.
 - **Evaluation focus:** Architecture, testing, and code quality — not interface polish or sophistication. If time runs short, reduce feature scope rather than quality.
 - **AI tools:** Use of generative AI tools (e.g., GitHub Copilot, ChatGPT) is explicitly permitted and encouraged. The final submission must still be consistent, coherent, and reflect the candidate's own understanding and ownership of the design and implementation.
 
@@ -87,6 +87,11 @@ Provide the following capabilities through the chosen interface:
   - Any assumptions made.
   - (Optional) Notes on trade-offs made due to time constraints.
 - Ensure commit history is reasonably clean, reflecting the development process.
+
+## Decisions Made
+
+- **Commit history:** Will follow personal practice of squashing before submission rather than keeping partial/WIP check-ins — no intermediate commits expected.
+- **Persistence:** EF Core + SQLite, going beyond the "file-based or in-memory is sufficient" minimum to demonstrate real ORM usage (migrations, change tracking, LINQ). SQLite keeps it compatible with the spirit of file-based storage — one file, no separate DB server. See [`../architecture/backend/overview.md#persistence`](../architecture/backend/overview.md#persistence).
 
 ## Open Questions / Follow-ups
 
