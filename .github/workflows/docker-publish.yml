@@ -7,7 +7,7 @@ on:
 
 env:
   HARBOR_REGISTRY: docker.thecameraeye.ca
-  HARBOR_PROJECT: inhouse
+  HARBOR_PROJECT: todo-app
 
 jobs:
   backend-ci:

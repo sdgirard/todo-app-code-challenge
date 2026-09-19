@@ -14,7 +14,7 @@ Nothing yet specifies CPU/memory `requests`/`limits` for the K8s pod, or whether
 
 ## ~~Image vulnerability scanning~~ — Resolved
 
-**Resolved by:** [`harbor-registry-setup.md#5-vulnerability-scanning`](./harbor-registry-setup.md#5-vulnerability-scanning). Decision: Harbor's built-in (Trivy) scanner, enabled on the `inhouse` project, scan-on-push, results reviewed via the Harbor UI/API. Not currently gating the CI pipeline (informational only) — see that section's Policy note for why.
+**Resolved by:** [`harbor-registry-setup.md#5-vulnerability-scanning`](./harbor-registry-setup.md#5-vulnerability-scanning). Decision: Harbor's built-in (Trivy) scanner, enabled on the `todo-app` project, scan-on-push, results reviewed via the Harbor UI/API. Not currently gating the CI pipeline (informational only) — see that section's Policy note for why.
 
 ## K8s: cert password → Kestrel config wiring
 

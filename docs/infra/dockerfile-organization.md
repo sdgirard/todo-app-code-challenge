@@ -32,14 +32,14 @@ A single `.dockerignore` at the repo root covers both Dockerfiles' build context
 
 ## Image naming: `todo-app-<service>`
 
-Two distinct images under the same `inhouse` Harbor project (see [`harbor-registry-setup.md`](./harbor-registry-setup.md)), not one shared `todo-app` image with a tag suffix:
+Two distinct images under the same `todo-app` Harbor project (see [`harbor-registry-setup.md`](./harbor-registry-setup.md)), not one shared `todo-app` image with a tag suffix:
 
 | Image | Dockerfile | Status |
 |---|---|---|
-| `docker.thecameraeye.ca/inhouse/todo-app-gateway` | `docker/Dockerfile.gateway` | Exists, built and pushed by CI |
-| `docker.thecameraeye.ca/inhouse/todo-app-web` | `docker/Dockerfile.app` | Not yet built — `frontend/` doesn't exist yet |
+| `docker.thecameraeye.ca/todo-app/todo-app-gateway` | `docker/Dockerfile.gateway` | Exists, built and pushed by CI |
+| `docker.thecameraeye.ca/todo-app/todo-app-web` | `docker/Dockerfile.app` | Not yet built — `frontend/` doesn't exist yet |
 
-**Why separate images, not one `todo-app` image with `-backend`/`-frontend` tags:** these are two genuinely different deployables (different runtime, different pod in K8s, independently scalable/updatable) — Docker tags are for versions of the *same* artifact, not for naming unrelated artifacts. Each gets its own repository within the `inhouse` project, each with its own `latest`/SHA/semver tags (see [`versioning.md`](./versioning.md)).
+**Why separate images, not one `todo-app` image with `-backend`/`-frontend` tags:** these are two genuinely different deployables (different runtime, different pod in K8s, independently scalable/updatable) — Docker tags are for versions of the *same* artifact, not for naming unrelated artifacts. Each gets its own repository within the `todo-app` project, each with its own `latest`/SHA/semver tags (see [`versioning.md`](./versioning.md)).
 
 This is a rename from the single `todo-app` image name used before this reorganization — no images had actually been pushed under the old name yet (containerization is still in initial setup, not a released feature), so there's no migration/deprecation concern.
 

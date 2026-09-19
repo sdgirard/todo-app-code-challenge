@@ -3,47 +3,55 @@
 How to configure this repo to build and push its Docker images to Harbor, both locally and via CI. Two images share this same registry/project/robot-account setup — see [`dockerfile-organization.md`](./dockerfile-organization.md) for why they're separate images and how the Dockerfiles are laid out.
 
 - **Registry:** `docker.thecameraeye.ca`
-- **Project:** `inhouse`
+- **Project:** `todo-app`
 - **Images:**
-  - `docker.thecameraeye.ca/inhouse/todo-app-gateway` — backend, exists today
-  - `docker.thecameraeye.ca/inhouse/todo-app-web` — frontend, not yet built (`frontend/` doesn't exist yet)
+  - `docker.thecameraeye.ca/todo-app/todo-app-gateway` — backend, exists today
+  - `docker.thecameraeye.ca/todo-app/todo-app-web` — frontend, not yet built (`frontend/` doesn't exist yet)
+
+## Project visibility: public, dedicated project
+
+**`todo-app` is a dedicated Harbor project created solely for this challenge's two images, with Access Level set to Public** (Harbor UI: Project → Configuration → "Public" checkbox) — anonymous `docker pull` works with no login, so a reviewer can pull either image without a Harbor account or robot credentials.
+
+**Why a separate project rather than making an existing project public:** this registry also hosts other, unrelated projects (e.g. `inhouse`, used for other things on this home lab). Harbor's public/private toggle is a **project-level** setting, not per-repository — there is no way to expose just `todo-app-gateway` while keeping everything else under a shared project private. Putting these two images in their own project makes "public" and "public todo-app images only" the same statement, with no risk of an unrelated image becoming reachable later just because it landed in the same project.
+
+**Push still requires the robot account below** — "Public" in Harbor only grants anonymous **pull**; write access is unaffected, so CI/local pushes are unchanged from before this was made public.
 
 ## Prerequisites
 
 - Docker installed locally.
-- Access to the `inhouse` project on `docker.thecameraeye.ca` (permission to create a robot account).
+- Access to the `todo-app` project on `docker.thecameraeye.ca` (permission to create a robot account) — only needed for pushing; pulling needs nothing.
 - `gh` CLI authenticated (already set up in this repo) if configuring GitHub Actions secrets from the command line.
 
 ## 1. Create a Harbor Robot Account
 
-Robot accounts are Harbor's scoped, non-interactive credentials — use one instead of a personal Harbor login for both local Docker pushes and CI.
+Robot accounts are Harbor's scoped, non-interactive credentials — use one instead of a personal Harbor login for both local Docker pushes and CI. Not needed for pulling, since the project is public (see above) — only for pushing new builds.
 
-1. In the Harbor UI, go to the **inhouse** project → **Robot Accounts** → **New Robot Account**.
-2. Scope it to the `inhouse` project, with at minimum **push** and **pull** permissions on repositories.
-3. Save the generated **username** (typically `robot$inhouse+<name>`) and **token/secret** — the token is only shown once.
+1. In the Harbor UI, go to the **todo-app** project → **Robot Accounts** → **New Robot Account**.
+2. Scope it to the `todo-app` project, with at minimum **push** and **pull** permissions on repositories.
+3. Save the generated **username** (typically `robot$todo-app+<name>`) and **token/secret** — the token is only shown once.
 
 ## 2. Local Docker Login
 
 ```bash
-echo "<robot-token>" | docker login docker.thecameraeye.ca -u 'robot$inhouse+<robot-name>' --password-stdin
+echo "<robot-token>" | docker login docker.thecameraeye.ca -u 'robot$todo-app+<robot-name>' --password-stdin
 ```
 
-Credentials are stored in your local Docker config (`~/.docker/config.json`). Avoid passing the token via `-p` on the command line — it lands in shell history; the `--password-stdin` form above avoids that.
+Credentials are stored in your local Docker config (`~/.docker/config.json`). Avoid passing the token via `-p` on the command line — it lands in shell history; the `--password-stdin` form above avoids that. **Only required for pushing** — since the project is public, `docker pull docker.thecameraeye.ca/todo-app/todo-app-gateway:latest` works with no login at all.
 
 ## 3. Local Build & Push
 
 Each image is built with `-f docker/Dockerfile.<name>` against a repo-root context (see [`dockerfile-organization.md`](./dockerfile-organization.md)):
 
 ```bash
-docker build -f docker/Dockerfile.gateway -t docker.thecameraeye.ca/inhouse/todo-app-gateway:latest .
-docker push docker.thecameraeye.ca/inhouse/todo-app-gateway:latest
+docker build -f docker/Dockerfile.gateway -t docker.thecameraeye.ca/todo-app/todo-app-gateway:latest .
+docker push docker.thecameraeye.ca/todo-app/todo-app-gateway:latest
 ```
 
 This single-platform form builds only for the host machine's architecture — fine for a quick local sanity check, but **it doesn't produce the same multi-arch manifest CI publishes** (see [`container-image.md#multi-arch-linuxamd64--linuxarm64`](./container-image.md#multi-arch-linuxamd64--linuxarm64)). To build/push both `linux/amd64` and `linux/arm64` locally, the same way CI does:
 
 ```bash
 docker buildx build -f docker/Dockerfile.gateway --platform linux/amd64,linux/arm64 \
-  -t docker.thecameraeye.ca/inhouse/todo-app-gateway:latest \
+  -t docker.thecameraeye.ca/todo-app/todo-app-gateway:latest \
   --push .
 ```
 
@@ -59,13 +67,13 @@ It needs one **repository secret pair** (Settings → Secrets and variables → 
 
 | Name | Value |
 |---|---|
-| `HARBOR_ROBOT_USERNAME` | `robot$inhouse+<robot-name>` |
+| `HARBOR_ROBOT_USERNAME` | `robot$todo-app+<robot-name>` |
 | `HARBOR_ROBOT_TOKEN` | the robot account's token |
 
 ### Setting these via `gh` CLI
 
 ```bash
-gh secret set HARBOR_ROBOT_USERNAME --body 'robot$inhouse+ci'
+gh secret set HARBOR_ROBOT_USERNAME --body 'robot$todo-app+ci'
 gh secret set HARBOR_ROBOT_TOKEN   # prompts for value, or pipe via stdin
 ```
 
@@ -80,12 +88,12 @@ Considered and ruled out:
 - **A dedicated CI scanning step** (Trivy or Grype run directly in `docker-publish.yml`, e.g. `aquasecurity/trivy-action`) — would duplicate what Harbor already does natively on the same image, adds another job/step to maintain, and means findings live in CI logs instead of alongside the image in the registry where they're easiest to find later.
 - **A separate scanning platform/SaaS** (Snyk, etc.) — unnecessary additional account/integration for a project this size; Harbor's native scanner already covers the actual need (OS packages + known application dependency CVEs) without it.
 
-### Enabling the scanner on `inhouse`
+### Enabling the scanner on `todo-app`
 
 1. In the Harbor UI (as an instance admin, not just a project member), go to **Administration → Interrogation Services**.
 2. Confirm a Trivy scanner is listed and its status is **Healthy**. Most self-hosted Harbor instances ship with Trivy pre-registered at the instance level; this step just confirms it's active, it doesn't need setting up per project.
-3. Go to the **inhouse** project → **Configuration**.
-4. Under **Vulnerability Scanning**, enable **"Automatically scan images on push"** — this is a project-level setting, so it covers every repository under `inhouse` (both `todo-app-gateway` and, later, `todo-app-web`) with no per-image configuration and no change needed to `docker-publish.yml`.
+3. Go to the **todo-app** project → **Configuration**.
+4. Under **Vulnerability Scanning**, enable **"Automatically scan images on push"** — this is a project-level setting, so it covers every repository under `todo-app` (both `todo-app-gateway` and, later, `todo-app-web`) with no per-image configuration and no change needed to `docker-publish.yml`.
 
 ### How it runs
 
@@ -95,14 +103,14 @@ Considered and ruled out:
 
 ### Reviewing results
 
-1. Harbor UI → **inhouse** project → **Repositories** → `todo-app-gateway` (or `todo-app-web`) → select a tag.
+1. Harbor UI → **todo-app** project → **Repositories** → `todo-app-gateway` (or `todo-app-web`) → select a tag.
 2. The **Vulnerabilities** tab shows the scan report: severity breakdown (Critical/High/Medium/Low), CVE IDs, affected package, fixed-in version if available. A severity badge also shows directly on the repository/tag list view.
 
 Via the API instead, using the same robot account credentials from step 1 above:
 
 ```bash
-curl -u 'robot$inhouse+<robot-name>:<token>' \
-  "https://docker.thecameraeye.ca/api/v2.0/projects/inhouse/repositories/todo-app-gateway/artifacts/latest/additions/vulnerabilities"
+curl -u 'robot$todo-app+<robot-name>:<token>' \
+  "https://docker.thecameraeye.ca/api/v2.0/projects/todo-app/repositories/todo-app-gateway/artifacts/latest/additions/vulnerabilities"
 ```
 
 ### Policy: informational only, not blocking the pipeline (for now)
