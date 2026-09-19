@@ -17,4 +17,13 @@ public sealed class TodoRepository(TodoDbContext dbContext) : ITodoRepository
 
     public Task<TodoModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         dbContext.Todos.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+
+    public Task<TodoModel?> GetTrackedByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        dbContext.Todos.FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+
+    public async Task<TodoModel> UpdateAsync(TodoModel todo, CancellationToken cancellationToken)
+    {
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return todo;
+    }
 }

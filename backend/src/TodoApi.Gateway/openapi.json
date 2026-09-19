@@ -112,6 +112,49 @@
             "description": "Not Found"
           }
         }
+      },
+      "put": {
+        "tags": [
+          "Todos"
+        ],
+        "summary": "Update an existing to-do item's title, description, due date, and completion status",
+        "operationId": "UpdateTodo",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTodoEndpointRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodoResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
       }
     }
   },
@@ -188,6 +231,36 @@
               "string"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "UpdateTodoEndpointRequest": {
+        "required": [
+          "title",
+          "description",
+          "dueDate",
+          "isCompleted"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dueDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "isCompleted": {
+            "type": "boolean"
           }
         }
       },

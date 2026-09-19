@@ -17,6 +17,15 @@ public static class TodoMapping
         UpdatedAt = null,
     };
 
+    public static void ApplyTo(this UpdateTodoEndpoint.Request request, TodoModel model)
+    {
+        model.Title = request.Title;
+        model.Description = request.Description;
+        model.DueDate = request.DueDate;
+        model.IsCompleted = request.IsCompleted;
+        model.UpdatedAt = DateTime.UtcNow;
+    }
+
     public static TodoResponse ToResponse(this TodoModel model) => new(
         model.Id,
         model.Title,

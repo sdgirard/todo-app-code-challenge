@@ -9,4 +9,8 @@ public interface ITodoRepository
     Task<IReadOnlyList<TodoModel>> ListAsync(CancellationToken cancellationToken);
 
     Task<TodoModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<TodoModel?> GetTrackedByIdAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<TodoModel> UpdateAsync(TodoModel todo, CancellationToken cancellationToken);
 }
