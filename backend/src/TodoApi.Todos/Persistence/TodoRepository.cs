@@ -26,4 +26,10 @@ public sealed class TodoRepository(TodoDbContext dbContext) : ITodoRepository
         await dbContext.SaveChangesAsync(cancellationToken);
         return todo;
     }
+
+    public async Task DeleteAsync(TodoModel todo, CancellationToken cancellationToken)
+    {
+        dbContext.Todos.Remove(todo);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

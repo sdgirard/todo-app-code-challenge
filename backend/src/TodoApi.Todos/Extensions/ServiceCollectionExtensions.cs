@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IListTodosQueryHandler, ListTodosQueryHandler>();
         services.AddScoped<IGetTodoByIdQueryHandler, GetTodoByIdQueryHandler>();
         services.AddScoped<IUpdateTodoCommandHandler, UpdateTodoCommandHandler>();
+        services.AddScoped<IDeleteTodoCommandHandler, DeleteTodoCommandHandler>();
 
         services.AddValidatorsFromAssemblyContaining<AddTodoEndpoint.RequestValidator>();
 

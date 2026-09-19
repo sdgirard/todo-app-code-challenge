@@ -13,4 +13,6 @@ public interface ITodoRepository
     Task<TodoModel?> GetTrackedByIdAsync(Guid id, CancellationToken cancellationToken);
 
     Task<TodoModel> UpdateAsync(TodoModel todo, CancellationToken cancellationToken);
+
+    Task DeleteAsync(TodoModel todo, CancellationToken cancellationToken);
 }
