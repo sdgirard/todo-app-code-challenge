@@ -1,16 +1,32 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Moq;
+using TodoApi.Todos.Models;
+using TodoApi.Todos.Persistence;
 
 namespace TodoApi.Gateway.Tests;
 
-public class AddTodoEndpointTests : IClassFixture<TodoApiWebApplicationFactory>
+public class AddTodoEndpointTests : IDisposable
 {
+    private readonly TodoApiWebApplicationFactory _factory = new();
     private readonly HttpClient _client;
+    private readonly Mock<ITodoRepository> _repository;
 
-    public AddTodoEndpointTests(TodoApiWebApplicationFactory factory)
+    public AddTodoEndpointTests()
     {
-        _client = factory.CreateClient();
+        _client = _factory.CreateClient();
+        _repository = _factory.Repository;
+        _repository
+            .Setup(r => r.AddAsync(It.IsAny<TodoModel>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TodoModel todo, CancellationToken _) => todo);
+    }
+
+    public void Dispose()
+    {
+        _client.Dispose();
+        _factory.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     // Sending a valid new todo through the real API should create it and hand back
@@ -33,6 +49,21 @@ public class AddTodoEndpointTests : IClassFixture<TodoApiWebApplicationFactory>
         Assert.False(body.GetProperty("isCompleted").GetBoolean());
     }
 
+    // A valid request should actually reach the persistence layer, not just echo back.
+    [Fact]
+    public async Task PostTodos_WithValidBody_PersistsTheTodo()
+    {
+        var request = new { title = "Buy milk" };
+
+        await _client.PostAsJsonAsync("/todos", request);
+
+        _repository.Verify(
+            r => r.AddAsync(
+                It.Is<TodoModel>(todo => todo.Title == "Buy milk" && !todo.IsCompleted),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     // Trying to create a todo without a title through the real API should be
     // rejected, and the error should clearly point at the title field.
     [Fact]
@@ -46,6 +77,19 @@ public class AddTodoEndpointTests : IClassFixture<TodoApiWebApplicationFactory>
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(body.GetProperty("errors").TryGetProperty("Title", out _));
+    }
+
+    // An invalid request should be rejected before anything is persisted.
+    [Fact]
+    public async Task PostTodos_WithMissingTitle_DoesNotPersistAnything()
+    {
+        var request = new { title = "" };
+
+        await _client.PostAsJsonAsync("/todos", request);
+
+        _repository.Verify(
+            r => r.AddAsync(It.IsAny<TodoModel>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     // Trying to create a todo that's already overdue through the real API should

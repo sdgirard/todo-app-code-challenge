@@ -10,7 +10,11 @@ env:
   HARBOR_PROJECT: inhouse
 
 jobs:
+  backend-ci:
+    uses: ./.github/workflows/backend-ci.yml
+
   version:
+    needs: backend-ci
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.generate.outputs.version }}

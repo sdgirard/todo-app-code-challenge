@@ -65,4 +65,50 @@ public class TodoMappingTests
         Assert.Equal(model.IsCompleted, response.IsCompleted);
         Assert.Equal(model.CreatedAt, response.CreatedAt);
     }
+
+    // Turning a saved todo into a list item should carry over every field the client
+    // should see — including the "last updated" time, which the create response drops
+    // but a list of possibly-edited todos genuinely needs.
+    [Fact]
+    public void ToListResponse_WithModel_MapsAllFieldsIncludingUpdatedAt()
+    {
+        var model = new TodoModel
+        {
+            Id = Guid.NewGuid(),
+            Title = "Buy milk",
+            Description = "2% or whole",
+            DueDate = DateTime.UtcNow.AddDays(1),
+            IsCompleted = true,
+            CreatedAt = DateTime.UtcNow.AddDays(-1),
+            UpdatedAt = DateTime.UtcNow,
+        };
+
+        var response = model.ToListResponse();
+
+        Assert.Equal(model.Id, response.Id);
+        Assert.Equal(model.Title, response.Title);
+        Assert.Equal(model.Description, response.Description);
+        Assert.Equal(model.DueDate, response.DueDate);
+        Assert.Equal(model.IsCompleted, response.IsCompleted);
+        Assert.Equal(model.CreatedAt, response.CreatedAt);
+        Assert.Equal(model.UpdatedAt, response.UpdatedAt);
+    }
+
+    // A todo that's never been edited should report no update time at all.
+    [Fact]
+    public void ToListResponse_WithNeverUpdatedModel_LeavesUpdatedAtNull()
+    {
+        var model = new TodoModel
+        {
+            Id = Guid.NewGuid(),
+            Title = "Buy milk",
+            IsCompleted = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = null,
+        };
+
+        var response = model.ToListResponse();
+
+        Assert.Null(response.UpdatedAt);
+    }
 }

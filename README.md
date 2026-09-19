@@ -91,6 +91,7 @@ This repo's design decisions are documented as they were made, not written up af
 **Feature Specs**
 
 - [`docs/features/add-todo/spec.md`](docs/features/add-todo/spec.md) — `POST /todos`: full `TodoModel` schema, DTO contract, validation, mapping, CQRS, persistence, and test plan for the first endpoint
+- [`docs/features/list-todos/spec.md`](docs/features/list-todos/spec.md) — `GET /todos`: first read endpoint and first CQRS query; bare-array contract, `IQueryHandler<,>`, and the ordering/filtering deferral
 
 **Infrastructure**
 

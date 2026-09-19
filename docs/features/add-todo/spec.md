@@ -316,12 +316,18 @@ Per-layer, following the split named as an open item in [`overview.md#open-quest
 
 - **`TodoApi.Todos.Tests`**
   - `RequestValidator`: empty/whitespace `Title` fails; `Title`/`Description` over their max length fail; a past `DueDate` fails, today/future/`null` `DueDate` passes; valid `Title` with/without optional fields passes.
-  - `AddTodoCommandHandler`: calls `ITodoRepository.AddAsync` with the given model, returns it wrapped in `AddTodoCommandResult` — repository mocked/faked.
+  - `AddTodoCommandHandler`: calls `ITodoRepository.AddAsync` with the given model, returns it wrapped in `AddTodoCommandResult` — repository mocked via **Moq** (see [Mocking](#mocking) below).
   - `TodoMapping`: `ToModel()` produces a non-empty `Id`, `IsCompleted == false`, `CreatedAt` populated, `UpdatedAt == null`; `ToResponse()` maps all fields straight through and omits `UpdatedAt`.
   - `ValidationFilter<TRequest>`: invalid request short-circuits to `TypedResults.ValidationProblem` without calling `next`; valid request calls `next` and returns its result unchanged.
 - **`TodoApi.Gateway.Tests`**
-  - Integration test through the full pipeline (`WebApplicationFactory`, SQLite file or in-memory-mode SQLite for test isolation — TBD, see [Open Questions](#open-questions)): `POST /todos` with a valid body returns `201` with a `Location` header and a body matching the request; missing `Title` returns `400` with a `ValidationProblemDetails` body naming `Title`.
-  - `DueDate` serialization round-trip: a request with `dueDate` sent as a bare date (no `Z`) echoes back without a `Z`; a request with `dueDate` sent with an explicit `Z`/offset echoes back with one — confirms the `Kind`-dependent behavior noted in [`TodoModel`](#todomodel-domain-model) rather than assuming it.
+  - Integration test through the full pipeline (`WebApplicationFactory`, SQLite in-memory mode with `ITodoRepository` replaced by a **Moq** mock — see [Mocking](#mocking)): `POST /todos` with a valid body returns `201` with a `Location` header and a body matching the request; missing `Title` returns `400` with a `ValidationProblemDetails` body naming `Title`; a valid request calls `ITodoRepository.AddAsync` exactly once with a matching model, an invalid one calls it never.
+  - `DueDate` serialization round-trip: a request with `dueDate` sent as a bare date (no `Z`) echoes back without a `Z`; a request with `dueDate` sent with an explicit `Z`/offset echoes back with one — confirms the `Kind`-dependent behavior noted in [`TodoModel`](#todomodel-domain-model) rather than assuming it. Still valid under a mocked repository since this is a JSON-serialization concern, not a persistence one.
+
+### Mocking
+
+**Moq**, added once List's spec needed a second handler test and the hand-written `FakeTodoRepository` pattern this spec originally used started costing a stub per repository method a given test never touched. Decision and full rationale (including the trade-off of no longer exercising real EF Core/SQLite round-trips in `TodoApi.Gateway.Tests`) recorded in [`../list-todos/spec.md#mocking`](../list-todos/spec.md#mocking) rather than duplicated here, since that is where the switch actually happened.
+
+`TodoApiWebApplicationFactory` exposes a `Repository` (`Mock<ITodoRepository>`) that tests configure per-instance; the factory itself is now created per test class instance (`IDisposable`, not `IClassFixture`) so each test gets an isolated mock with no shared state to reset between tests.
 
 ## Open Questions
 

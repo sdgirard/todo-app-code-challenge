@@ -4,28 +4,32 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Moq;
 using TodoApi.Todos.Persistence;
 
 namespace TodoApi.Gateway.Tests;
 
 /// <summary>
-/// Swaps TodoDbContext onto a kept-open SQLite in-memory connection, so each test
-/// class gets an isolated database (no shared file/state), while still exercising
-/// the real SQLite provider rather than EF Core's InMemory provider (ruled out for
-/// non-test use — see docs/architecture/backend/overview.md#persistence — but real
-/// enough here for integration tests too, since it's the same underlying engine).
+/// Hosts the real API pipeline with ITodoRepository replaced by a Moq mock, so
+/// endpoint tests exercise routing, model binding, validation, CQRS dispatch and
+/// JSON serialization without touching a database. Set up and assert against
+/// <see cref="Repository"/>.
 ///
-/// Deliberately nothing is mocked below the HTTP boundary — real TodoDbContext,
-/// real TodoRepository, real EF Core migrations. A more common pattern mocks
-/// ITodoRepository and stops the integration test at the service tier; that's
-/// cheaper/faster at scale but would have hidden the DueDate Kind/offset
-/// round-trip quirk this suite pins (see AddTodoEndpointTests). Worth
-/// re-evaluating if the endpoint surface grows large enough that full-stack
-/// SQLite setup per test class becomes a real cost.
+/// TodoDbContext is still registered (onto a kept-open SQLite in-memory connection)
+/// because startup applies migrations; nothing reads through it once the repository
+/// is mocked.
+///
+/// Trade-off, recorded deliberately: this drops real EF Core/SQLite round-trip
+/// coverage. It is what makes persistence-layer bugs invisible to this suite —
+/// mapping, query translation and provider behavior are no longer exercised
+/// end-to-end. Repository-level coverage would need its own tests against a real
+/// provider to close that gap.
 /// </summary>
 public sealed class TodoApiWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
+
+    public Mock<ITodoRepository> Repository { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -35,6 +39,9 @@ public sealed class TodoApiWebApplicationFactory : WebApplicationFactory<Program
         {
             services.RemoveAll<DbContextOptions<TodoDbContext>>();
             services.AddDbContext<TodoDbContext>(options => options.UseSqlite(_connection));
+
+            services.RemoveAll<ITodoRepository>();
+            services.AddSingleton(Repository.Object);
         });
     }
 

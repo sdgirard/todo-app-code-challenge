@@ -11,7 +11,9 @@ public static class Endpoints
         var todos = app.MapGroup("/todos")
             .WithTags("Todos");
 
-        todos.MapEndpoint<AddTodoEndpoint>();
+        todos
+            .MapEndpoint<AddTodoEndpoint>()
+            .MapEndpoint<ListTodosEndpoint>();
     }
 
     private static IEndpointRouteBuilder MapEndpoint<TEndpoint>(this IEndpointRouteBuilder app)

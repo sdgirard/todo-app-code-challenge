@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using TodoApi.Todos.Commands;
 using TodoApi.Todos.Endpoints;
 using TodoApi.Todos.Persistence;
+using TodoApi.Todos.Queries;
 
 namespace TodoApi.Todos.Extensions;
 
@@ -17,6 +18,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<ITodoRepository, TodoRepository>();
         services.AddScoped<IAddTodoCommandHandler, AddTodoCommandHandler>();
+        services.AddScoped<IListTodosQueryHandler, ListTodosQueryHandler>();
 
         services.AddValidatorsFromAssemblyContaining<AddTodoEndpoint.RequestValidator>();
 

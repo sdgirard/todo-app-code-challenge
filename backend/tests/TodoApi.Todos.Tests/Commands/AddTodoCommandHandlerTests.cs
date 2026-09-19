@@ -1,3 +1,4 @@
+using Moq;
 using TodoApi.Todos.Commands;
 using TodoApi.Todos.Models;
 using TodoApi.Todos.Persistence;
@@ -11,8 +12,6 @@ public class AddTodoCommandHandlerTests
     [Fact]
     public async Task HandleAsync_WithTodo_PersistsAndReturnsSavedTodo()
     {
-        var repository = new FakeTodoRepository();
-        var handler = new AddTodoCommandHandler(repository);
         var todo = new TodoModel
         {
             Id = Guid.NewGuid(),
@@ -20,21 +19,15 @@ public class AddTodoCommandHandlerTests
             IsCompleted = false,
             CreatedAt = DateTime.UtcNow,
         };
+        var repository = new Mock<ITodoRepository>();
+        repository
+            .Setup(r => r.AddAsync(todo, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(todo);
+        var handler = new AddTodoCommandHandler(repository.Object);
 
         var result = await handler.HandleAsync(new AddTodoCommand(todo), CancellationToken.None);
 
-        Assert.Same(todo, repository.LastAdded);
+        repository.Verify(r => r.AddAsync(todo, It.IsAny<CancellationToken>()), Times.Once);
         Assert.Same(todo, result.Todo);
-    }
-
-    private sealed class FakeTodoRepository : ITodoRepository
-    {
-        public TodoModel? LastAdded { get; private set; }
-
-        public Task<TodoModel> AddAsync(TodoModel todo, CancellationToken cancellationToken)
-        {
-            LastAdded = todo;
-            return Task.FromResult(todo);
-        }
     }
 }
