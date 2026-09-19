@@ -16,6 +16,7 @@ public static class Endpoints
             .MapEndpoint<ListTodosEndpoint>()
             .MapEndpoint<GetTodoByIdEndpoint>()
             .MapEndpoint<UpdateTodoEndpoint>()
+            .MapEndpoint<UpdateCompletionStatusEndpoint>()
             .MapEndpoint<DeleteTodoEndpoint>();
     }
 

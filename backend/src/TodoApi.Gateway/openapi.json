@@ -156,6 +156,49 @@
           }
         }
       },
+      "patch": {
+        "tags": [
+          "Todos"
+        ],
+        "summary": "Mark a to-do item as completed or not completed",
+        "operationId": "UpdateCompletionStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCompletionStatusEndpointRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodoResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
       "delete": {
         "tags": [
           "Todos"
@@ -257,6 +300,17 @@
               "string"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "UpdateCompletionStatusEndpointRequest": {
+        "required": [
+          "isCompleted"
+        ],
+        "type": "object",
+        "properties": {
+          "isCompleted": {
+            "type": "boolean"
           }
         }
       },

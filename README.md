@@ -40,7 +40,7 @@ Full rationale for every architectural decision lives under [`docs/`](docs/) —
 **Backend architecture** ([`docs/architecture/backend/overview.md`](docs/architecture/backend/overview.md)):
 
 - **Modular monolith** — a thin `TodoApi.Gateway` host references a `TodoApi.Todos` feature library. Designed as a monolith first, but the feature boundary already exists as a project reference, so a feature could be extracted into its own service later without restructuring.
-- **Minimal API, endpoint-per-class** — each HTTP operation (Add, List, View, Update, Complete, Incomplete, Delete) is its own class implementing a shared `IEndpoint` interface, not a controller action. Single responsibility at the endpoint level.
+- **Minimal API, endpoint-per-class** — each HTTP operation (Add, List, View, Update, Complete/Incomplete, Delete) is its own class implementing a shared `IEndpoint` interface, not a controller action. Complete and Incomplete share one endpoint (`PATCH /todos/{id}`, driven by an `isCompleted` value) rather than two, since both are the same "set completion status to X" operation. Single responsibility at the endpoint level.
 - **CQRS without a mediator library** — commands and queries are separated, but dispatched via direct DI injection of a named interface per handler (e.g. `IAddTodoCommandHandler`), not a mediator like MediatR. See [`docs/architecture/backend/cqrs.md`](docs/architecture/backend/cqrs.md) for why (licensing) and how.
 - **DTOs never cross below the service tier** — the service tier validates the incoming DTO and maps it to a domain Model; everything below (CQRS handlers, repository, persistence) only ever sees Models. Mapping is hand-written (`ToModel()`/`ToResponse()` extension methods) — no AutoMapper (licensing) and no Mapster (the source-generator package it originally called for doesn't exist on NuGet; the real CLI-codegen alternative wasn't worth the build-lag trade-off for a model this small).
 - **Persistence: EF Core + SQLite** — a deliberate choice beyond the requirements' "file-based or in-memory is sufficient" minimum, to demonstrate real ORM usage. See [`docs/architecture/backend/overview.md#persistence`](docs/architecture/backend/overview.md#persistence).
@@ -93,6 +93,9 @@ This repo's design decisions are documented as they were made, not written up af
 - [`docs/features/add-todo/spec.md`](docs/features/add-todo/spec.md) — `POST /todos`: full `TodoModel` schema, DTO contract, validation, mapping, CQRS, persistence, and test plan for the first endpoint
 - [`docs/features/list-todos/spec.md`](docs/features/list-todos/spec.md) — `GET /todos`: first read endpoint and first CQRS query; bare-array contract, `IQueryHandler<,>`, and the ordering/filtering deferral
 - [`docs/features/get-todo-by-id/spec.md`](docs/features/get-todo-by-id/spec.md) — `GET /todos/{id}`: the View requirement; first route parameter, first `404` outcome, and the RFC 9457 not-found contract
+- [`docs/features/update-todo/spec.md`](docs/features/update-todo/spec.md) — `PUT /todos/{id}`: the Update requirement; full-resource replacement (including `isCompleted`), first CQRS command with a real existence-check rule
+- [`docs/features/delete-todo/spec.md`](docs/features/delete-todo/spec.md) — `DELETE /todos/{id}`: the Delete requirement; hard delete, `204` on success
+- [`docs/features/update-completion-status/spec.md`](docs/features/update-completion-status/spec.md) — `PATCH /todos/{id}`: the Complete/Incomplete requirements, collapsed into one endpoint that dispatches through `UpdateTodo`'s existing command rather than a new write path
 
 **Infrastructure**
 
