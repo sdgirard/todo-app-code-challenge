@@ -92,6 +92,7 @@ This repo's design decisions are documented as they were made, not written up af
 
 - [`docs/features/add-todo/spec.md`](docs/features/add-todo/spec.md) — `POST /todos`: full `TodoModel` schema, DTO contract, validation, mapping, CQRS, persistence, and test plan for the first endpoint
 - [`docs/features/list-todos/spec.md`](docs/features/list-todos/spec.md) — `GET /todos`: first read endpoint and first CQRS query; bare-array contract, `IQueryHandler<,>`, and the ordering/filtering deferral
+- [`docs/features/get-todo-by-id/spec.md`](docs/features/get-todo-by-id/spec.md) — `GET /todos/{id}`: the View requirement; first route parameter, first `404` outcome, and the RFC 9457 not-found contract
 
 **Infrastructure**
 

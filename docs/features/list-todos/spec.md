@@ -160,6 +160,8 @@ No ordering clause, per [Ordering](#ordering-known-limitation).
 
 ## Mapping (`TodoMapping`)
 
+> **Superseded:** `ListTodosEndpoint.Response` and `ToListResponse()` as described below, along with `AddTodoEndpoint.Response`/`ToResponse()`, were consolidated into a single shared `TodoResponse` DTO and one `ToResponse()` mapping in [`../get-todo-by-id/spec.md#shared-todoresponse-dto`](../get-todo-by-id/spec.md#shared-todoresponse-dto) — the naming split below (driven by C#'s no-overload-on-return-type rule) stopped being necessary once all three endpoints' response shapes converged. Left as-written below for the historical record of the original decision.
+
 Hand-written extension method, per [`overview.md#mapping-dto--model`](../../architecture/backend/overview.md#mapping-dto--model). Adds one method to the existing `TodoApi.Todos/TodoMapping.cs`; `ToModel()` and `ToResponse()` are untouched.
 
 ```csharp

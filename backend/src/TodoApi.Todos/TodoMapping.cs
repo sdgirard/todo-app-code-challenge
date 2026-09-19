@@ -1,3 +1,4 @@
+using TodoApi.Todos.Dtos;
 using TodoApi.Todos.Endpoints;
 using TodoApi.Todos.Models;
 
@@ -16,18 +17,7 @@ public static class TodoMapping
         UpdatedAt = null,
     };
 
-    public static AddTodoEndpoint.Response ToResponse(this TodoModel model) => new(
-        model.Id,
-        model.Title,
-        model.Description,
-        model.DueDate,
-        model.IsCompleted,
-        model.CreatedAt,
-        model.UpdatedAt);
-
-    // Named for its endpoint rather than overloading ToResponse: C# can't overload
-    // on return type alone, and both would be (this TodoModel).
-    public static ListTodosEndpoint.Response ToListResponse(this TodoModel model) => new(
+    public static TodoResponse ToResponse(this TodoModel model) => new(
         model.Id,
         model.Title,
         model.Description,

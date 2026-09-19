@@ -51,6 +51,8 @@ backend/
 │       │   └── GetTodoByIdQuery.cs
 │       ├── Models/
 │       │   └── TodoModel.cs
+│       ├── Dtos/                         # endpoint-facing response DTOs shared across endpoints — see features/get-todo-by-id/spec.md
+│       │   └── TodoResponse.cs
 │       ├── Persistence/                  # repository interface + EF Core implementation, see Persistence below
 │       │   ├── ITodoRepository.cs
 │       │   ├── TodoRepository.cs

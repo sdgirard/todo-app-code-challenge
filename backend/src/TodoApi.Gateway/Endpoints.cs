@@ -13,7 +13,8 @@ public static class Endpoints
 
         todos
             .MapEndpoint<AddTodoEndpoint>()
-            .MapEndpoint<ListTodosEndpoint>();
+            .MapEndpoint<ListTodosEndpoint>()
+            .MapEndpoint<GetTodoByIdEndpoint>();
     }
 
     private static IEndpointRouteBuilder MapEndpoint<TEndpoint>(this IEndpointRouteBuilder app)

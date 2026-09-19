@@ -19,6 +19,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITodoRepository, TodoRepository>();
         services.AddScoped<IAddTodoCommandHandler, AddTodoCommandHandler>();
         services.AddScoped<IListTodosQueryHandler, ListTodosQueryHandler>();
+        services.AddScoped<IGetTodoByIdQueryHandler, GetTodoByIdQueryHandler>();
 
         services.AddValidatorsFromAssemblyContaining<AddTodoEndpoint.RequestValidator>();
 

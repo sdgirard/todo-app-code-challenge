@@ -14,4 +14,7 @@ public sealed class TodoRepository(TodoDbContext dbContext) : ITodoRepository
 
     public async Task<IReadOnlyList<TodoModel>> ListAsync(CancellationToken cancellationToken) =>
         await dbContext.Todos.AsNoTracking().ToListAsync(cancellationToken);
+
+    public Task<TodoModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
+        dbContext.Todos.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
 }

@@ -106,6 +106,8 @@ No business-rule validation applies to Create — there's no existing state to c
 
 ## Mapping (`TodoMapping`)
 
+> **Superseded:** `AddTodoEndpoint.Response` and `ToResponse()` as described below were consolidated into a shared `TodoResponse` DTO (also used by List and GetById) in [`../get-todo-by-id/spec.md#shared-todoresponse-dto`](../get-todo-by-id/spec.md#shared-todoresponse-dto), once `AddTodo`'s response picked up `UpdatedAt` and all three endpoints' shapes became identical. Left as-written below for the historical record of the original decision.
+
 **No mapping library** — hand-written static extension methods, per [`overview.md#mapping-dto--model`](../../architecture/backend/overview.md#mapping-dto--model) (AutoMapper ruled out on licensing; Mapster considered and dropped — the planned `Mapster.SourceGenerator` package doesn't exist on NuGet, and `Mapster.Tool`'s CLI-codegen alternative wasn't worth its build-lag mechanic for a model this small).
 
 `TodoApi.Todos/TodoMapping.cs`:

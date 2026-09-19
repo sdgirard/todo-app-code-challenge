@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using TodoApi.Todos.Commands;
-using TodoApi.Todos.Models;
+using TodoApi.Todos.Dtos;
 
 namespace TodoApi.Todos.Endpoints;
 
@@ -18,15 +18,6 @@ public sealed class AddTodoEndpoint : IEndpoint
             .AddEndpointFilter<ValidationFilter<Request>>();
 
     public sealed record Request(string Title, string? Description, DateTime? DueDate);
-
-    public sealed record Response(
-        Guid Id,
-        string Title,
-        string? Description,
-        DateTime? DueDate,
-        bool IsCompleted,
-        DateTime CreatedAt,
-        DateTime? UpdatedAt);
 
     public sealed class RequestValidator : AbstractValidator<Request>
     {
@@ -41,7 +32,7 @@ public sealed class AddTodoEndpoint : IEndpoint
         }
     }
 
-    private static async Task<Created<Response>> Handle(
+    private static async Task<Created<TodoResponse>> Handle(
         [FromBody] Request request,
         [FromServices] IAddTodoCommandHandler handler,
         CancellationToken cancellationToken)
