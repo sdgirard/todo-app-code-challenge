@@ -42,7 +42,7 @@ Full rationale for every architectural decision lives under [`docs/`](docs/) —
 - **Modular monolith** — a thin `TodoApi.Gateway` host references a `TodoApi.Todos` feature library. Designed as a monolith first, but the feature boundary already exists as a project reference, so a feature could be extracted into its own service later without restructuring.
 - **Minimal API, endpoint-per-class** — each HTTP operation (Add, List, View, Update, Complete, Incomplete, Delete) is its own class implementing a shared `IEndpoint` interface, not a controller action. Single responsibility at the endpoint level.
 - **CQRS without a mediator library** — commands and queries are separated, but dispatched via direct DI injection of a named interface per handler (e.g. `IAddTodoCommandHandler`), not a mediator like MediatR. See [`docs/architecture/backend/cqrs.md`](docs/architecture/backend/cqrs.md) for why (licensing) and how.
-- **DTOs never cross below the service tier** — the service tier validates the incoming DTO and maps it to a domain Model; everything below (CQRS handlers, repository, persistence) only ever sees Models. Mapping is via Mapster's source generator (`Mapster.SourceGenerator`), not AutoMapper (licensing) and not Mapster's default runtime-reflection mode.
+- **DTOs never cross below the service tier** — the service tier validates the incoming DTO and maps it to a domain Model; everything below (CQRS handlers, repository, persistence) only ever sees Models. Mapping is hand-written (`ToModel()`/`ToResponse()` extension methods) — no AutoMapper (licensing) and no Mapster (the source-generator package it originally called for doesn't exist on NuGet; the real CLI-codegen alternative wasn't worth the build-lag trade-off for a model this small).
 - **Persistence: EF Core + SQLite** — a deliberate choice beyond the requirements' "file-based or in-memory is sufficient" minimum, to demonstrate real ORM usage. See [`docs/architecture/backend/overview.md#persistence`](docs/architecture/backend/overview.md#persistence).
 - **Error responses:** RFC 9457 Problem Details, ASP.NET Core's built-in convention — no custom error DTO.
 - **API contract:** OpenAPI spec generated at build time from endpoint metadata, committed to the repo, consumed by a generated TypeScript client (orval) on the frontend side. No hand-written API client. **Scalar** provides the interactive UI for manually exercising the API in Development (Swagger UI's replacement now that it's out of the default .NET template).
@@ -87,6 +87,10 @@ This repo's design decisions are documented as they were made, not written up af
 **Standards**
 
 - [`docs/standards/aspnet-web-api-guidelines.md`](docs/standards/aspnet-web-api-guidelines.md) — backend coding standards (DI, single responsibility, cyclomatic complexity, error responses, style)
+
+**Feature Specs**
+
+- [`docs/features/add-todo/spec.md`](docs/features/add-todo/spec.md) — `POST /todos`: full `TodoModel` schema, DTO contract, validation, mapping, CQRS, persistence, and test plan for the first endpoint
 
 **Infrastructure**
 

@@ -60,9 +60,9 @@ private static async Task<Results<Created<Response>, ValidationProblem>> Handle(
     [FromServices] IAddTodoCommandHandler handler,   // <- named interface, not ISender, not the concrete class
     CancellationToken cancellationToken)
 {
-    var model = request.Adapt<TodoModel>();
+    var model = request.ToModel();
     var result = await handler.HandleAsync(new AddTodoCommand(model), cancellationToken);
-    var response = result.Adapt<Response>();
+    var response = result.ToResponse();
     return TypedResults.Created($"/todos/{response.Id}", response);
 }
 ```

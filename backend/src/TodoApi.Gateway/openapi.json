@@ -25,10 +25,67 @@
           }
         }
       }
+    },
+    "/todos": {
+      "post": {
+        "tags": [
+          "Todos"
+        ],
+        "summary": "Add a new to-do item",
+        "operationId": "AddTodo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "Request": {
+        "required": [
+          "title",
+          "description",
+          "dueDate"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dueDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "Response": {
         "required": [
           "version",
@@ -53,6 +110,9 @@
   "tags": [
     {
       "name": "VersionEndpoint"
+    },
+    {
+      "name": "Todos"
     }
   ]
 }

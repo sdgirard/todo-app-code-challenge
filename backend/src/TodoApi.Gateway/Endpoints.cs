@@ -1,3 +1,5 @@
+using TodoApi.Todos.Endpoints;
+
 namespace TodoApi.Gateway;
 
 public static class Endpoints
@@ -6,7 +8,16 @@ public static class Endpoints
     {
         VersionEndpoint.Map(app);
 
-        app.MapGroup("/todos")
+        var todos = app.MapGroup("/todos")
             .WithTags("Todos");
+
+        todos.MapEndpoint<AddTodoEndpoint>();
+    }
+
+    private static IEndpointRouteBuilder MapEndpoint<TEndpoint>(this IEndpointRouteBuilder app)
+        where TEndpoint : IEndpoint
+    {
+        TEndpoint.Map(app);
+        return app;
     }
 }

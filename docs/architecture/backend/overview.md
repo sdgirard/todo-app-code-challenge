@@ -56,7 +56,7 @@ backend/
 │       │   ├── TodoRepository.cs
 │       │   ├── TodoDbContext.cs
 │       │   └── Migrations/               # EF Core migrations
-│       ├── TodoMappingConfig.cs          # IRegister, see Mapping section above
+│       ├── TodoMapping.cs                # hand-written DTO<->Model mapping, see Mapping section above
 │       ├── Extensions/
 │       │   └── ServiceCollectionExtensions.cs  # AddTodosServices(), pulled into Gateway's ConfigureServices
 │       └── TodoApi.Todos.csproj
@@ -125,47 +125,49 @@ Locally, the file just lives on disk in the working directory (relative path, vi
 
 **Not using AutoMapper** — as of late 2024 AutoMapper requires a paid commercial license for new/updated versions, which isn't appropriate to pull into this project.
 
-Using **Mapster** instead, specifically via **`Mapster.SourceGenerator`** — a Roslyn incremental source generator, not Mapster's default runtime-reflection mode and not the older `Mapster.Tool` CLI codegen path. Considered three options:
+**Not using Mapster either — hand-written mapping methods instead.** History of this decision, since it changed twice while implementing the first endpoint ([`../../features/add-todo/spec.md`](../../features/add-todo/spec.md)):
 
-1. **Mapster default (runtime-reflection/compiled-expression-tree mode)** — ruled out. Still reflection-based under the hood (compiled + cached expression trees), not true build-time codegen, not inspectable as generated C#.
-2. **`Mapster.Tool` (CLI codegen)** — ruled out for this project. Requires a separate `dotnet mapster` invocation (or a wired-up pre-build step) to emit `.g.cs` files that get committed to the repo. More visible/`git diff`-able, but an extra manual step to keep in sync.
-3. **`Mapster.SourceGenerator` (chosen)** — a proper Roslyn incremental source generator, same category as Mapperly. Runs automatically on every build, no separate CLI step, always in sync with source. Generated code lives under `obj/generated` (viewable via the IDE's generated-file view, not committed to the repo) — same tradeoff profile as any other source generator in the project.
+1. Originally specified a package named `Mapster.SourceGenerator` (a supposed true Roslyn incremental source generator). **That package does not exist on NuGet** — verified directly against the NuGet API and search.
+2. Considered `Mapster.Tool` (real CLI codegen) as the closest actual match — but its mechanic is a *post-build* MSBuild target: `dotnet mapster mapper -a <built.dll>` runs after a build completes, reflecting over the already-compiled assembly to emit `.g.cs` files that only take effect on the **next** build. Not a hard failure (Mapster's runtime `.Adapt<T>()` fallback covers the gap), but real build-lag/onboarding friction for a project this small.
+3. **Chosen: hand-written mapping**, plain static extension methods, no library at all. For a `TodoModel` with 6 fields and a single feature, any mapping library (codegen or runtime-reflection) is more indirection than the problem justifies — a few explicit lines are just as easy to write, have zero dependency/build-order quirks, and are trivially unit-testable. Revisit only if a second feature or a genuinely complex mapping (nested objects, nontrivial transforms) makes hand-written mapping actually tedious.
 
-This keeps the property we want from any mapper here — no runtime reflection, mapping code is real compiler-generated C# — while staying free, MIT-licensed, and zero-maintenance to keep in sync (unlike the CLI path).
+- One static class per feature, named `{Feature}Mapping`, living alongside that feature's endpoints (not a separate top-level `Mapping/` folder) — e.g. `TodoMapping` next to the `Todos` endpoint classes. Same co-location principle Mapster's config would have followed.
+- Each conversion is an explicit extension method: `ToModel()` for DTO → Model, `ToResponse()` for Model → DTO. No attribute magic, no runtime type discovery — just a method that sets each field.
+- Only trivial, mostly 1:1 mappings are expected here (DTO fields to Model fields, same names) — if a mapping ever needs real logic, that logic belongs in the service tier or the mapping method itself, not smuggled into a CQRS handler.
 
-- DTO → Model and Model → response-DTO mappings are defined via Mapster's config (`TypeAdapterConfig`) or `[AdaptTo]`/`[AdaptFrom]`-style attributes, and the actual mapping methods are generated at build time.
-- Call sites use the generated `Adapt<T>()` extension method (e.g. `request.Adapt<TodoModel>()`) — same call-site ergonomics as AutoMapper's `Map<T>()`, but backed by generated code instead of a runtime mapper instance, so no `IMapper` service needs to be injected.
-- Only trivial, mostly 1:1 mappings are expected here (DTO fields to Model fields, same names) — if a mapping ever needs real logic, that logic belongs in the service tier or the mapping config, not smuggled into a handler.
-
-**Convention:** one `IRegister` mapping config class per feature, named `{Feature}MappingConfig`, living alongside that feature's endpoints (not in a separate top-level `Mapping/` folder) — e.g. `TodoMappingConfig` next to the `Todos` endpoint classes. Keeps a feature's HTTP shape, mapping rules, and business logic co-located rather than spreading one feature across parallel folder hierarchies.
-
-Example shape (illustrative — the mapping rules and class contents are a sketch, package reference/version still TODO once the project skeleton exists, see Open Questions):
+Example shape (illustrative — see [`../../features/add-todo/spec.md`](../../features/add-todo/spec.md) for the concrete `AddTodo` version):
 
 ```csharp
-// TodoMappingConfig.cs — defines the mapping rules; Mapster.SourceGenerator
-// generates the actual mapper implementation from this at build time.
-public class TodoMappingConfig : IRegister
+// TodoMapping.cs — hand-written, no codegen, no library.
+public static class TodoMapping
 {
-    public void Register(TypeAdapterConfig config)
+    public static TodoModel ToModel(this AddTodoEndpoint.Request request) => new()
     {
-        config.NewConfig<AddTodoEndpoint.Request, TodoModel>()
-            .Map(dest => dest.Id, src => Guid.NewGuid())
-            .Map(dest => dest.CreatedAt, src => DateTimeOffset.UtcNow)
-            .Map(dest => dest.IsCompleted, src => false);
+        Id = Guid.NewGuid(),
+        Title = request.Title,
+        Description = request.Description,
+        DueDate = request.DueDate,
+        IsCompleted = false,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = null,
+    };
 
-        config.NewConfig<TodoModel, AddTodoEndpoint.Response>();
-    }
+    public static AddTodoEndpoint.Response ToResponse(this TodoModel model) => new(
+        model.Id,
+        model.Title,
+        model.Description,
+        model.DueDate,
+        model.IsCompleted,
+        model.CreatedAt);
 }
 ```
 
 ```csharp
-// Call site — same shape whether the mapping is a straight 1:1 property copy
-// (Model -> Response above) or needs field-level rules (Request -> Model above).
-var model = request.Adapt<TodoModel>();
-var response = result.Adapt<AddTodoEndpoint.Response>();
+// Call site — same shape regardless of whether the mapping is a straight
+// property copy or needs field-level logic (both are just C# in the method body).
+var model = request.ToModel();
+var response = result.Todo.ToResponse();
 ```
-
-`Mapster.SourceGenerator` picks up every `IRegister` implementation in the project as a Roslyn incremental generator step and emits the mapper implementation at compile time, so `.Adapt<T>()` calls resolve to generated code rather than doing reflection at runtime — no separate build step, no generated files to commit.
 
 ## Endpoint Pattern
 
@@ -207,13 +209,13 @@ public class AddTodoEndpoint : IEndpoint
         CancellationToken cancellationToken)
     {
         // DTO -> Model mapping happens here, at the service tier boundary,
-        // via a Mapster-generated extension method (see Mapping section below).
+        // via a hand-written extension method (see Mapping section below).
         // The CQRS handler below only ever sees TodoModel, never Request/Response.
-        var model = request.Adapt<TodoModel>();
+        var model = request.ToModel();
 
         var result = await handler.HandleAsync(new AddTodoCommand(model), cancellationToken);
 
-        var response = result.Adapt<Response>();
+        var response = result.ToResponse();
         return TypedResults.Created($"/todos/{response.Id}", response);
     }
 }
@@ -329,7 +331,7 @@ graph TB
 - `IEndpoint` interface shape and shared endpoint-mapping helper — needs to be defined for this project (not carried over verbatim from prior work, just the pattern).
 - Persistence mechanism is decided: EF Core + SQLite (see Persistence section above). SQLite package/connection string configuration, exact PVC mount path for the home-lab deployment, and local dev file path are not yet finalized.
 - Testing strategy per layer (service tier vs CQRS handlers vs repository) — not yet written up.
-- `Mapster.SourceGenerator` NuGet package reference/version — naming convention and folder placement for `IRegister` config classes are decided (see Mapping section above); the package reference itself gets pinned once the project skeleton exists.
+- ~~`Mapster.SourceGenerator` NuGet package reference/version~~ — resolved: no mapping library used at all; hand-written `{Feature}Mapping` extension methods instead (see Mapping section above).
 - CQRS dispatch mechanism specifics — see [`cqrs.md`](./cqrs.md) Open Questions.
 
 ## Error Response Contract
