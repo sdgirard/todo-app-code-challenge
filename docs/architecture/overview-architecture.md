@@ -16,7 +16,7 @@ graph TB
 
     subgraph Server
         API[ASP.NET Core<br/>Minimal API]
-        Store[(Persistence<br/>File-based / In-memory)]
+        Store[(Persistence<br/>EF Core + SQLite)]
     end
 
     SPA -->|HTTPS / JSON| API
@@ -25,7 +25,7 @@ graph TB
 
 - **React SPA** — Vite-built React app using React Router's data APIs (loaders/actions) for routing and data fetching. Owns presentation only; no business logic beyond client-side validation feedback.
 - **ASP.NET Core Minimal API** — Owns the to-do domain model, request validation, and status codes/error contract. Exposes REST endpoints under `/todos`.
-- **Persistence** — File-based or in-memory storage behind a repository interface, per the requirements doc's persistence guidance.
+- **Persistence** — EF Core + SQLite behind a repository interface (`ITodoRepository`), a deliberate choice beyond the requirements doc's "file-based or in-memory is sufficient" minimum, made to demonstrate real ORM usage. See [`backend/overview.md#persistence`](./backend/overview.md#persistence) for the full decision and what was ruled out.
 
 ## API Contract & Client Generation
 

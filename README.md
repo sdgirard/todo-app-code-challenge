@@ -2,7 +2,7 @@
 
 A to-do list application built for the Foci Solutions take-home coding challenge. See [`docs/requirements/requirements.md`](docs/requirements/requirements.md) for the full assignment.
 
-**Status:** Backend project skeleton scaffolded (`TodoApi.Gateway` + `TodoApi.Todos`, builds and tests run, no feature endpoints yet). Frontend not yet scaffolded. Architecture and standards are fully specced — see [Documentation Map](#documentation-map) below.
+**Status:** Backend CRUD + completion-status endpoints implemented and tested (`TodoApi.Gateway` + `TodoApi.Todos`) — Add, List, View, Update, Delete, and Complete/Incomplete all working end-to-end against SQLite via EF Core. Frontend not yet scaffolded. See [Documentation Map](#documentation-map) below for the full design.
 
 ## Stack
 
@@ -14,7 +14,7 @@ See [`docs/architecture/overview-architecture.md`](docs/architecture/overview-ar
 
 ## Build & Run
 
-**Backend:** project skeleton exists (`TodoApi.Gateway` + `TodoApi.Todos`, no feature endpoints yet).
+**Backend:** all six feature endpoints implemented (`POST /todos`, `GET /todos`, `GET /todos/{id}`, `PUT /todos/{id}`, `PATCH /todos/{id}`, `DELETE /todos/{id}`) — see [Feature Specs](#documentation-map) below for each one's contract.
 
 - Build: `dotnet build` from `backend/`
 - Run: `dotnet run --project backend/src/TodoApi.Gateway/` (serves HTTPS-only, per [`docs/infra/deployment.md`](docs/infra/deployment.md); the OpenAPI spec regenerates to `backend/src/TodoApi.Gateway/openapi.json` on every build)
@@ -25,11 +25,12 @@ See [`docs/architecture/overview-architecture.md`](docs/architecture/overview-ar
 
 ## Running Tests
 
-**Backend:** test project skeleton exists (`TodoApi.Todos.Tests`, `TodoApi.Gateway.Tests`), no tests written yet.
+**Backend:** `TodoApi.Todos.Tests` (validators, mapping, CQRS handlers) and `TodoApi.Gateway.Tests` (full-pipeline integration tests via `WebApplicationFactory`, with `ITodoRepository` mocked) — 79 tests, all passing.
 
-- Run: `dotnet test` from `backend/`
+- Run: `dotnet test TodoApi.slnx` from `backend/` — always target the solution explicitly; a bare `dotnet test` can silently pick up only one of the two test projects.
+- Test with coverage: `dotnet test TodoApi.slnx --collect:"XPlat Code Coverage" --settings tests.runsettings --results-directory ./TestResults` from `backend/`, then generate an HTML report with `reportgenerator` — see [`CLAUDE.md`](CLAUDE.md) for the full command.
 
-Testing strategy (per-layer approach: service tier, CQRS handlers, repository) is still an open item — see [`docs/architecture/backend/overview.md`](docs/architecture/backend/overview.md) Open Questions.
+Per-layer testing strategy: `RequestValidator` rules, `TodoMapping` methods, and CQRS command/query handlers (mocked `ITodoRepository` via Moq) are unit tested in `TodoApi.Todos.Tests`; each endpoint's full HTTP contract (status codes, response shape, validation ordering) is integration tested in `TodoApi.Gateway.Tests`. Every feature spec under [`docs/features/`](docs/features/) documents its own Tests section following this split.
 
 **Frontend:** **TODO — not yet available.**
 
@@ -49,7 +50,7 @@ Full rationale for every architectural decision lives under [`docs/`](docs/) —
 
 **Frontend architecture:** doc not yet written — see [Documentation Map](#documentation-map).
 
-**Testing strategy:** not yet written up — open item in [`docs/architecture/backend/overview.md`](docs/architecture/backend/overview.md).
+**Testing strategy:** per-layer — validators, mapping, and CQRS handlers unit tested with mocked (Moq) dependencies in `TodoApi.Todos.Tests`; each endpoint's full HTTP contract integration tested via `WebApplicationFactory` (with `ITodoRepository` mocked, real EF Core/SQLite migrations applied at startup) in `TodoApi.Gateway.Tests`. See [Running Tests](#running-tests) above.
 
 ## Assumptions
 

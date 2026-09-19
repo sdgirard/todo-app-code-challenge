@@ -80,8 +80,6 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IAddTodoCommandHandler, AddTodoCommandHandler>();
         services.AddScoped<IUpdateTodoCommandHandler, UpdateTodoCommandHandler>();
-        services.AddScoped<ICompleteTodoCommandHandler, CompleteTodoCommandHandler>();
-        services.AddScoped<IIncompleteTodoCommandHandler, IncompleteTodoCommandHandler>();
         services.AddScoped<IDeleteTodoCommandHandler, DeleteTodoCommandHandler>();
         services.AddScoped<IListTodosQueryHandler, ListTodosQueryHandler>();
         services.AddScoped<IGetTodoByIdQueryHandler, GetTodoByIdQueryHandler>();
@@ -91,24 +89,26 @@ public static class ServiceCollectionExtensions
 }
 ```
 
-Explicit and a little repetitive, but for seven handlers that's a non-issue, and it's more transparent than assembly-scanning magic — anyone reading this file sees exactly what's registered and how.
+Explicit and a little repetitive, but for five handlers that's a non-issue, and it's more transparent than assembly-scanning magic — anyone reading this file sees exactly what's registered and how.
+
+**No `ICompleteTodoCommandHandler`/`IIncompleteTodoCommandHandler`.** An earlier draft of this list assumed Complete and Incomplete would each get their own command/handler pair, matching the seven operations the requirements name (Add, List, View, Update, Complete, Incomplete, Delete). That didn't happen: per [`../../features/update-completion-status/spec.md#cqrs`](../../features/update-completion-status/spec.md#cqrs), Complete/Incomplete shipped as a single `PATCH /todos/{id}` endpoint (`UpdateCompletionStatusEndpoint`) that constructs an `UpdateTodoEndpoint.Request` internally and dispatches through the existing `UpdateTodoCommand`/`IUpdateTodoCommandHandler` — no new command type, no new registration. `IUpdateTodoCommandHandler` is therefore the one handler in this feature with two distinct callers (`UpdateTodoEndpoint` and `UpdateCompletionStatusEndpoint`), a deliberate, scoped exception to the "one caller per handler" framing the next section otherwise asserts.
 
 ## What we give up by not having a mediator
 
 Worth naming honestly, since a mediator isn't purely ceremony — these are real capabilities MediatR-style libraries provide that this approach doesn't:
 
 - **Automatic pipeline behaviors** — a mediator can wrap every handler in cross-cutting concerns (logging, validation, transactions) registered once, globally. Here, the same thing is achievable per-handler via a decorator implementing the same named interface (e.g. a `LoggingAddTodoCommandHandler : IAddTodoCommandHandler` wrapping the real one), but it has to be wired up explicitly per handler rather than applying automatically to all of them.
-- **Fully decoupling the caller from which handler exists** — a mediator lets a caller send a message without knowing or importing any handler type at all. Here, the endpoint still has a compile-time reference to `IAddTodoCommandHandler` specifically. That's fine when there's one caller per handler (true here); it matters more when many unrelated callers need to invoke the same handler through a uniform, decoupled entry point.
+- **Fully decoupling the caller from which handler exists** — a mediator lets a caller send a message without knowing or importing any handler type at all. Here, the endpoint still has a compile-time reference to `IAddTodoCommandHandler` specifically. That's fine when there's close to one caller per handler (true here, with one deliberate exception — see [`IUpdateTodoCommandHandler`'s two callers](#registration) above); it matters more when many unrelated callers need to invoke the same handler through a uniform, decoupled entry point.
 
-Given the project's size (one feature, seven operations, one caller per handler), neither tradeoff is costly enough to justify a mediator even ignoring the licensing issue — DI + named interfaces gets the readability and consistency benefits without paying for indirection this project doesn't need.
+Given the project's size (one feature, seven requirement-level operations collapsed into five handlers, at most two callers per handler), neither tradeoff is costly enough to justify a mediator even ignoring the licensing issue — DI + named interfaces gets the readability and consistency benefits without paying for indirection this project doesn't need.
 
 ## Where the generic interfaces live
 
 **Decided:** `ICommandHandler<,>`/`IQueryHandler<,>` live inside `TodoApi.Todos`, not a separate shared project — same "don't split until there's a second consumer" reasoning used for persistence (see [`overview.md`](./overview.md#directory-structure)). Revisit only if a second feature needs the same contracts.
 
-## Open Questions
+## Resolved: final command/query list
 
-- Exact command/query list is defined in [`overview.md`](./overview.md#open-questions--todo) — Add/Update/Complete/Incomplete/Delete as commands, List/View as queries. Naming convention (`{Operation}{Feature}Command` / `I{Operation}{Feature}CommandHandler` / `{Operation}{Feature}CommandHandler`) follows from the example above but isn't formally written down elsewhere yet.
+All six endpoints are implemented; this closes out what was previously an open question here. Commands: `AddTodoCommand`, `UpdateTodoCommand` (also backs Complete/Incomplete, see [Registration](#registration)), `DeleteTodoCommand`. Queries: `ListTodosQuery`, `GetTodoByIdQuery`. Naming convention (`{Operation}{Feature}Command` / `I{Operation}{Feature}CommandHandler` / `{Operation}{Feature}CommandHandler`, and the query equivalents) followed from the example above throughout, with no exceptions. Per-endpoint contracts, including exactly which command/handler each one uses, are documented in each feature's own spec under [`../../features/`](../../features/).
 
 ## Related Docs
 

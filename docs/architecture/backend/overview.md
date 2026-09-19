@@ -37,18 +37,19 @@ backend/
 │       │   ├── ListTodosEndpoint.cs
 │       │   ├── GetTodoByIdEndpoint.cs
 │       │   ├── UpdateTodoEndpoint.cs
-│       │   ├── CompleteTodoEndpoint.cs
-│       │   ├── IncompleteTodoEndpoint.cs
-│       │   └── DeleteTodoEndpoint.cs
+│       │   ├── UpdateCompletionStatusEndpoint.cs # Complete + Incomplete, one endpoint — see features/update-completion-status/spec.md
+│       │   ├── DeleteTodoEndpoint.cs
+│       │   ├── IEndpoint.cs
+│       │   └── ValidationFilter.cs
 │       ├── Commands/                     # CQRS commands + handlers, one file each — see cqrs.md
 │       │   ├── AddTodoCommand.cs
-│       │   ├── UpdateTodoCommand.cs
-│       │   ├── CompleteTodoCommand.cs
-│       │   ├── IncompleteTodoCommand.cs
-│       │   └── DeleteTodoCommand.cs
+│       │   ├── UpdateTodoCommand.cs      # also backs UpdateCompletionStatusEndpoint — no separate Complete/Incomplete command
+│       │   ├── DeleteTodoCommand.cs
+│       │   └── ICommandHandler.cs
 │       ├── Queries/                      # CQRS queries + handlers — see cqrs.md
 │       │   ├── ListTodosQuery.cs
-│       │   └── GetTodoByIdQuery.cs
+│       │   ├── GetTodoByIdQuery.cs
+│       │   └── IQueryHandler.cs
 │       ├── Models/
 │       │   └── TodoModel.cs
 │       ├── Dtos/                         # endpoint-facing response DTOs shared across endpoints — see features/get-todo-by-id/spec.md
@@ -64,8 +65,8 @@ backend/
 │       └── TodoApi.Todos.csproj
 │
 └── tests/
-    ├── TodoApi.Todos.Tests/
-    └── TodoApi.Gateway.Tests/            # host-level/integration tests, if any
+    ├── TodoApi.Todos.Tests/              # RequestValidator, TodoMapping, and CQRS handler unit tests (Moq)
+    └── TodoApi.Gateway.Tests/            # full-pipeline integration tests via WebApplicationFactory (ITodoRepository mocked)
 ```
 
 See [`../overview-architecture.md#repo-layout`](../overview-architecture.md#repo-layout) for where `backend/` sits relative to `frontend/` and the rest of the repo.
@@ -86,14 +87,17 @@ Considered and ruled out:
 
 `ITodoRepository` is a thin wrapper directly over `TodoDbContext`/`DbSet<TodoModel>` — no separate Unit of Work abstraction on top. `DbContext` already *is* a unit of work (it tracks changes and commits them together via `SaveChangesAsync`), so adding another layer on top would duplicate what EF Core already provides. Appropriate because there's a single entity and no cross-repository transactions to coordinate; would be worth revisiting only if a second feature's repository needed to commit alongside `ITodoRepository` in the same transaction.
 
+The actual interface, as it shipped (see [`../../features/update-todo/spec.md#repository`](../../features/update-todo/spec.md#repository) and [`../../features/delete-todo/spec.md#repository`](../../features/delete-todo/spec.md#repository) for why `GetByIdAsync`/`GetTrackedByIdAsync` are two separate methods rather than one with a `track: bool` flag):
+
 ```csharp
 public interface ITodoRepository
 {
     Task<TodoModel> AddAsync(TodoModel todo, CancellationToken cancellationToken);
-    Task<TodoModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<IReadOnlyList<TodoModel>> ListAsync(CancellationToken cancellationToken);
-    Task<TodoModel?> UpdateAsync(TodoModel todo, CancellationToken cancellationToken);
-    Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
+    Task<TodoModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
+    Task<TodoModel?> GetTrackedByIdAsync(Guid id, CancellationToken cancellationToken);
+    Task<TodoModel> UpdateAsync(TodoModel todo, CancellationToken cancellationToken);
+    Task DeleteAsync(TodoModel todo, CancellationToken cancellationToken);
 }
 
 public sealed class TodoRepository(TodoDbContext dbContext) : ITodoRepository
@@ -106,9 +110,9 @@ public sealed class TodoRepository(TodoDbContext dbContext) : ITodoRepository
     }
 
     public Task<TodoModel?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
-        dbContext.Todos.FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+        dbContext.Todos.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
 
-    // ListAsync / UpdateAsync / DeleteAsync follow the same shape —
+    // ListAsync / GetTrackedByIdAsync / UpdateAsync / DeleteAsync follow the same shape —
     // EF Core specifics fully contained here, CQRS handlers only see ITodoRepository.
 }
 ```
@@ -137,7 +141,7 @@ Locally, the file just lives on disk in the working directory (relative path, vi
 - Each conversion is an explicit extension method: `ToModel()` for DTO → Model, `ToResponse()` for Model → DTO. No attribute magic, no runtime type discovery — just a method that sets each field.
 - Only trivial, mostly 1:1 mappings are expected here (DTO fields to Model fields, same names) — if a mapping ever needs real logic, that logic belongs in the service tier or the mapping method itself, not smuggled into a CQRS handler.
 
-Example shape (illustrative — see [`../../features/add-todo/spec.md`](../../features/add-todo/spec.md) for the concrete `AddTodo` version):
+The actual `TodoMapping.cs`, as it shipped — `ToResponse()` targets the shared `TodoResponse` DTO (see [`../../features/get-todo-by-id/spec.md#shared-todoresponse-dto`](../../features/get-todo-by-id/spec.md#shared-todoresponse-dto)), not a per-endpoint `Response` record, and `ApplyTo()` was added by [`../../features/update-todo/spec.md#mapping-todomapping`](../../features/update-todo/spec.md#mapping-todomapping) to mutate an existing tracked `TodoModel` in place rather than construct a new one:
 
 ```csharp
 // TodoMapping.cs — hand-written, no codegen, no library.
@@ -154,13 +158,23 @@ public static class TodoMapping
         UpdatedAt = null,
     };
 
-    public static AddTodoEndpoint.Response ToResponse(this TodoModel model) => new(
+    public static void ApplyTo(this UpdateTodoEndpoint.Request request, TodoModel model)
+    {
+        model.Title = request.Title;
+        model.Description = request.Description;
+        model.DueDate = request.DueDate;
+        model.IsCompleted = request.IsCompleted;
+        model.UpdatedAt = DateTime.UtcNow;
+    }
+
+    public static TodoResponse ToResponse(this TodoModel model) => new(
         model.Id,
         model.Title,
         model.Description,
         model.DueDate,
         model.IsCompleted,
-        model.CreatedAt);
+        model.CreatedAt,
+        model.UpdatedAt);
 }
 ```
 
@@ -180,12 +194,12 @@ Reusing a pattern I've used before on another Minimal API project: each endpoint
 - The `Handle` method is a thin static handler: bind request → call the CQRS command/query handler → map the result to a typed HTTP response (`TypedResults.Ok`, `TypedResults.NotFound`, etc.) → done. No business logic here.
 - Endpoints are grouped by feature and registered from a single place (`app.MapGroup("/todos")...MapEndpoint<AddTodoEndpoint>()...`), so the route table is readable in one spot without hunting through controller classes.
 
-Each CRUD/status operation (Add, List, View, Update, Complete, Incomplete, Delete) gets its own endpoint class under this pattern, rather than one `TodosController` with seven actions.
+Each CRUD/status operation gets its own endpoint class under this pattern, rather than one `TodosController` with several actions — with one deliberate exception: Complete and Incomplete share a single `UpdateCompletionStatusEndpoint` class (`PATCH /todos/{id}`, driven by an `isCompleted` value in the request body) rather than two near-identical classes differing only in a hardcoded `true`/`false`. See [`../../features/update-completion-status/spec.md#scope`](../../features/update-completion-status/spec.md#scope) for the reasoning. Six endpoint classes cover the seven requirement-level operations (Add, List, View, Update, Complete/Incomplete, Delete).
 
-Example shape (illustrative, not final):
+The actual `AddTodoEndpoint.cs`, as it shipped — note `Response` doesn't exist as a per-endpoint record; `Handle` returns the shared `TodoResponse` DTO instead (see [`../../features/get-todo-by-id/spec.md#shared-todoresponse-dto`](../../features/get-todo-by-id/spec.md#shared-todoresponse-dto)), and `DueDate` binds as `DateTime?`, not `DateOnly?`:
 
 ```csharp
-public class AddTodoEndpoint : IEndpoint
+public sealed class AddTodoEndpoint : IEndpoint
 {
     public static void Map(IEndpointRouteBuilder app) =>
         app.MapPost("/", Handle)
@@ -193,19 +207,22 @@ public class AddTodoEndpoint : IEndpoint
             .WithSummary("Add a new to-do item")
             .AddEndpointFilter<ValidationFilter<Request>>();
 
-    public record Request(string Title, string? Description, DateOnly? DueDate);
+    public sealed record Request(string Title, string? Description, DateTime? DueDate);
 
-    public record Response(Guid Id, string Title, string? Description, DateOnly? DueDate, bool IsCompleted, DateTimeOffset CreatedAt);
-
-    public class RequestValidator : AbstractValidator<Request>
+    public sealed class RequestValidator : AbstractValidator<Request>
     {
         public RequestValidator()
         {
-            RuleFor(x => x.Title).NotEmpty();
+            RuleFor(x => x.Title).NotEmpty().MaximumLength(200);
+            RuleFor(x => x.Description).MaximumLength(2000).When(x => x.Description is not null);
+            RuleFor(x => x.DueDate)
+                .GreaterThanOrEqualTo(DateTime.UtcNow.Date)
+                .When(x => x.DueDate is not null)
+                .WithMessage("DueDate must not be in the past.");
         }
     }
 
-    private static async Task<Results<Created<Response>, ValidationProblem>> Handle(
+    private static async Task<Created<TodoResponse>> Handle(
         [FromBody] Request request,
         [FromServices] IAddTodoCommandHandler handler, // named interface, see cqrs.md
         CancellationToken cancellationToken)
@@ -217,7 +234,7 @@ public class AddTodoEndpoint : IEndpoint
 
         var result = await handler.HandleAsync(new AddTodoCommand(model), cancellationToken);
 
-        var response = result.ToResponse();
+        var response = result.Todo.ToResponse();
         return TypedResults.Created($"/todos/{response.Id}", response);
     }
 }
@@ -228,6 +245,8 @@ public class AddTodoEndpoint : IEndpoint
 Each endpoint class owns its own route (via its `Map` method), but something still has to call `Map` for every one of them at startup. That's the only job of `Endpoints.cs`: it's a single, static file that registers every endpoint onto the app, grouped by feature/route prefix. It holds no request handling, no validation, no business logic — just the list of "these are all the endpoints that exist, and here's the route group each one lives under."
 
 Having one file like this means the full route table is visible in one place without opening every endpoint class, while the endpoint classes themselves stay independent and self-contained.
+
+The actual `Endpoints.cs`, as it shipped (also registers a `VersionEndpoint` outside the `/todos` group, omitted here — see [`../overview-architecture.md`](../overview-architecture.md)):
 
 ```csharp
 public static class Endpoints
@@ -242,8 +261,7 @@ public static class Endpoints
             .MapEndpoint<ListTodosEndpoint>()
             .MapEndpoint<GetTodoByIdEndpoint>()
             .MapEndpoint<UpdateTodoEndpoint>()
-            .MapEndpoint<CompleteTodoEndpoint>()
-            .MapEndpoint<IncompleteTodoEndpoint>()
+            .MapEndpoint<UpdateCompletionStatusEndpoint>()
             .MapEndpoint<DeleteTodoEndpoint>();
     }
 
@@ -327,14 +345,16 @@ graph TB
 - **Domain:** the Model types themselves — plain, framework-agnostic where possible.
 - **Infrastructure (Repository/Persistence):** also Model-typed; swapping file-based for in-memory (or a real DB later) shouldn't ripple up past this layer.
 
-## Open Questions / TODO
+## Resolved (formerly Open Questions / TODO)
 
-- Exact command/query list per CRUD operation (Add, Update, Complete, Incomplete, Delete → commands; List, View → queries) — needs to be enumerated.
-- `IEndpoint` interface shape and shared endpoint-mapping helper — needs to be defined for this project (not carried over verbatim from prior work, just the pattern).
-- Persistence mechanism is decided: EF Core + SQLite (see Persistence section above). SQLite package/connection string configuration, exact PVC mount path for the home-lab deployment, and local dev file path are not yet finalized.
-- Testing strategy per layer (service tier vs CQRS handlers vs repository) — not yet written up.
+All six feature endpoints are implemented; the items originally tracked here are resolved:
+
+- ~~Exact command/query list per CRUD operation~~ — resolved: `AddTodoCommand`, `UpdateTodoCommand` (also backs Complete/Incomplete — see [`../../features/update-completion-status/spec.md#cqrs`](../../features/update-completion-status/spec.md#cqrs), no separate command was added), `DeleteTodoCommand`; `ListTodosQuery`, `GetTodoByIdQuery`. Full detail in [`cqrs.md`](./cqrs.md#registration) and each feature's own spec.
+- ~~`IEndpoint` interface shape and shared endpoint-mapping helper~~ — resolved: `IEndpoint.cs` (a `static abstract void Map(IEndpointRouteBuilder app)` member) and the private `MapEndpoint<TEndpoint>()` helper in `Endpoints.cs`, both shown above, are what shipped.
+- ~~SQLite package/connection string configuration, exact PVC mount path, local dev file path~~ — resolved: see [Where the SQLite file lives](#where-the-sqlite-file-lives) above. The PVC/StorageClass definition itself remains TODO in `deployment.md`'s Cluster/Ingress section — an infra item, not a backend-code one.
+- ~~Testing strategy per layer~~ — resolved: `RequestValidator` rules, `TodoMapping` methods, and CQRS command/query handlers are unit tested with `Mock<ITodoRepository>` (Moq) in `TodoApi.Todos.Tests`; each endpoint's full HTTP contract is integration tested via `WebApplicationFactory` (repository still mocked) in `TodoApi.Gateway.Tests`. See [`../../standards/aspnet-web-api-guidelines.md#testing`](../../standards/aspnet-web-api-guidelines.md#testing) for the full writeup, including the real/mocked persistence trade-off this approach accepts.
 - ~~`Mapster.SourceGenerator` NuGet package reference/version~~ — resolved: no mapping library used at all; hand-written `{Feature}Mapping` extension methods instead (see Mapping section above).
-- CQRS dispatch mechanism specifics — see [`cqrs.md`](./cqrs.md) Open Questions.
+- CQRS dispatch mechanism specifics — see [`cqrs.md`](./cqrs.md) for the final registration list and the `IUpdateTodoCommandHandler`-has-two-callers exception.
 
 ## Error Response Contract
 
