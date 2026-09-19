@@ -18,7 +18,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/VersionEndpointResponse"
                 }
               }
             }
@@ -37,7 +37,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Request"
+                "$ref": "#/components/schemas/AddTodoEndpointRequest"
               }
             }
           },
@@ -49,7 +49,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Response"
+                  "$ref": "#/components/schemas/AddTodoEndpointResponse"
                 }
               }
             }
@@ -70,7 +70,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/Response"
+                    "$ref": "#/components/schemas/ListTodosEndpointResponse"
                   }
                 }
               }
@@ -82,7 +82,7 @@
   },
   "components": {
     "schemas": {
-      "Request": {
+      "AddTodoEndpointRequest": {
         "required": [
           "title",
           "description",
@@ -108,7 +108,103 @@
           }
         }
       },
-      "Response": {
+      "AddTodoEndpointResponse": {
+        "required": [
+          "id",
+          "title",
+          "description",
+          "dueDate",
+          "isCompleted",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dueDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "isCompleted": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "ListTodosEndpointResponse": {
+        "required": [
+          "id",
+          "title",
+          "description",
+          "dueDate",
+          "isCompleted",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "dueDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "isCompleted": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "VersionEndpointResponse": {
         "required": [
           "version",
           "commit",

@@ -25,7 +25,8 @@ public sealed class AddTodoEndpoint : IEndpoint
         string? Description,
         DateTime? DueDate,
         bool IsCompleted,
-        DateTime CreatedAt);
+        DateTime CreatedAt,
+        DateTime? UpdatedAt);
 
     public sealed class RequestValidator : AbstractValidator<Request>
     {

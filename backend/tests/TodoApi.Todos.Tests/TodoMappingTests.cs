@@ -40,10 +40,10 @@ public class TodoMappingTests
     }
 
     // Turning a saved todo into a response should carry over every field the
-    // client should see, and should never include the "last updated" time
-    // (a brand new todo hasn't been updated, so there's nothing to show).
+    // client should see, including "last updated" (null for a brand new todo,
+    // but the field itself must still be present for clients that always read it).
     [Fact]
-    public void ToResponse_WithModel_MapsAllFieldsAndOmitsUpdatedAt()
+    public void ToResponse_WithModel_MapsAllFields()
     {
         var model = new TodoModel
         {
@@ -64,6 +64,7 @@ public class TodoMappingTests
         Assert.Equal(model.DueDate, response.DueDate);
         Assert.Equal(model.IsCompleted, response.IsCompleted);
         Assert.Equal(model.CreatedAt, response.CreatedAt);
+        Assert.Equal(model.UpdatedAt, response.UpdatedAt);
     }
 
     // Turning a saved todo into a list item should carry over every field the client

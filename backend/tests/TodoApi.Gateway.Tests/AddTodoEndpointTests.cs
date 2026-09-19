@@ -47,6 +47,7 @@ public class AddTodoEndpointTests : IDisposable
         Assert.Equal("Buy milk", body.GetProperty("title").GetString());
         Assert.Equal("2% or whole", body.GetProperty("description").GetString());
         Assert.False(body.GetProperty("isCompleted").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("updatedAt").ValueKind);
     }
 
     // A valid request should actually reach the persistence layer, not just echo back.

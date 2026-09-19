@@ -22,7 +22,8 @@ public static class TodoMapping
         model.Description,
         model.DueDate,
         model.IsCompleted,
-        model.CreatedAt);
+        model.CreatedAt,
+        model.UpdatedAt);
 
     // Named for its endpoint rather than overloading ToResponse: C# can't overload
     // on return type alone, and both would be (this TodoModel).
