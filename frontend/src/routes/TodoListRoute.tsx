@@ -20,7 +20,12 @@ export const TodoListRoute = () => {
         <p className="mb-4 text-sm text-red-600">{actionData.message}</p>
       )}
 
+      {/* Keying on the todo count forces TodoForm to remount (clearing its fields)
+          after a successful add, since a redirect back to this route doesn't
+          otherwise unmount the form and it isn't reachable after a failed add,
+          which re-renders this route without changing the todo count. */}
       <TodoForm
+        key={todos.length}
         intent="add"
         fieldErrors={actionData?.fieldErrors}
         submitting={submitting}

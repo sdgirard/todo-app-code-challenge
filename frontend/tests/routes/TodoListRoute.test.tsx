@@ -48,6 +48,24 @@ describe('TodoListRoute', () => {
     })
   })
 
+  it('clears the form fields after a successful add', async () => {
+    const user = userEvent.setup()
+    renderRoute()
+
+    await screen.findByText(sampleTodo.title)
+
+    await user.type(screen.getByLabelText('Title'), 'Walk the dog')
+    await user.type(screen.getByLabelText('Description'), 'Around the block')
+    await user.click(screen.getByRole('button', { name: /add to-do/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Walk the dog')).toBeInTheDocument()
+    })
+
+    expect(screen.getByLabelText('Title')).toHaveValue('')
+    expect(screen.getByLabelText('Description')).toHaveValue('')
+  })
+
   it('keeps the form and shows a field error when the server rejects the submission', async () => {
     const user = userEvent.setup()
 
