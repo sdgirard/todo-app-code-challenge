@@ -2,8 +2,6 @@
 
 A to-do list application built for the Foci Solutions take-home coding challenge. See [`docs/requirements/requirements.md`](docs/requirements/requirements.md) for the full assignment.
 
-**Status:** Feature-complete end to end. Backend CRUD + completion-status endpoints implemented and tested (`TodoApi.Gateway` + `TodoApi.Todos`) — Add, List, View, Update, Delete, and Complete/Incomplete all working against SQLite via EF Core. Frontend (Vite + React 19 + React Router + Tailwind CSS v4) implements all seven requirement-level operations across two routes, backed by an orval-generated TypeScript client and tested with Vitest/RTL/MSW. See [Documentation Map](#documentation-map) below for the full design.
-
 ## Stack
 
 - **Backend:** ASP.NET Core Minimal API, .NET 10, CQRS without a mediator library, EF Core + SQLite
@@ -14,6 +12,25 @@ See [`docs/architecture/overview-architecture.md`](docs/architecture/overview-ar
 
 ## Build & Run
 
+**Prerequisites:** [.NET 10 SDK](https://dotnet.microsoft.com/download), [Node.js](https://nodejs.org/) 20+, and (only for the container path) Docker.
+
+**Everything in this app runs over HTTPS, including local dev** — see [Assumptions](#assumptions) below. Before running the backend or frontend for the first time, generate and trust a local dev certificate once:
+
+```sh
+dotnet dev-certs https --trust
+```
+
+Without this step, `dotnet run` and `npm run dev` still start, but the browser will show an untrusted-certificate warning. (The container path uses a separately exported `.pfx`/PEM cert instead — see [`docs/infra/container-image.md`](docs/infra/container-image.md) and [`docs/infra/container-image-frontend.md`](docs/infra/container-image-frontend.md).)
+
+### Quickstart (local dev)
+
+Run these in order — the frontend generates its API client from the backend's live OpenAPI spec, so the backend must be running first:
+
+1. `dotnet run --project backend/src/TodoApi.Gateway/` — starts the API at `https://localhost:7020`
+2. In a second terminal, from `frontend/`: `npm install && npm run dev` — starts the app at `https://localhost:5173`
+
+Open `https://localhost:5173` in a browser. Full command reference, plus container/pre-built-image alternatives, below.
+
 **Backend:** all six feature endpoints implemented (`POST /todos`, `GET /todos`, `GET /todos/{id}`, `PUT /todos/{id}`, `PATCH /todos/{id}`, `DELETE /todos/{id}`) — see [Feature Specs](#documentation-map) below for each one's contract.
 
 - Build: `dotnet build` from `backend/`
@@ -22,7 +39,7 @@ See [`docs/architecture/overview-architecture.md`](docs/architecture/overview-ar
 - **Container:** `docker build -f docker/Dockerfile.gateway -t todo-app-gateway .` from the repo root. `docker build -f docker/Dockerfile.gateway --build-arg ENABLE_DEBUG=true -t todo-app-gateway:debug .` for a variant with `vsdbg` remote debugging. See [`docs/infra/container-image.md`](docs/infra/container-image.md) for the backend image's full design and [`docs/infra/harbor-registry-setup.md`](docs/infra/harbor-registry-setup.md) for pushing to the registry.
 - **Pre-built image (no build needed):** `docker pull docker.thecameraeye.ca/todo-app/todo-app-gateway:latest` — CI publishes here on every push to `main` that touches `backend/**`. The `todo-app` project is public (pull only, no login) specifically so this image is reviewer-accessible without Harbor credentials — see [`docs/infra/harbor-registry-setup.md#project-visibility-public-dedicated-project`](docs/infra/harbor-registry-setup.md#project-visibility-public-dedicated-project).
 
-**Frontend:** two routes cover all seven requirement-level operations — `/` (List, Add) and `/todos/:id` (View, Update, Complete/Incomplete, Delete). Requires the backend running locally first (see above) so `predev`/`prebuild` can generate the API client from its `openapi.json`.
+**Frontend:** two routes cover all seven requirement-level operations — `/` (List, Add) and `/todos/:id` (View, Update, Complete/Incomplete, Delete). Requires the backend running locally first (see [Quickstart](#quickstart-local-dev) below) so `predev`/`prebuild` can generate the API client from its `openapi.json`.
 
 - Install: `npm install` from `frontend/`
 - Run: `npm run dev` from `frontend/` (Vite dev server, `https://localhost:5173`; `predev` runs orval automatically first — see [API Contract & Client Generation](#documentation-map))
@@ -30,6 +47,28 @@ See [`docs/architecture/overview-architecture.md`](docs/architecture/overview-ar
 - Lint: `npm run lint` from `frontend/` (oxlint)
 - **Container:** `docker build -f docker/Dockerfile.app -t todo-app-web .` from the repo root — Node build stage, nginx (HTTPS-only, same TLS-everywhere convention as the backend) runtime stage. See [`docs/infra/container-image-frontend.md`](docs/infra/container-image-frontend.md) for the full design.
 - **Pre-built image (no build needed):** `docker pull docker.thecameraeye.ca/todo-app/todo-app-web:latest` — CI publishes here on every push to `main` that touches `frontend/**`.
+
+### Running Both Images Together (Docker Compose)
+
+Two compose files at the repo root, for two different questions:
+
+- **`docker-compose.yml`** — builds both images from local source. Use while iterating on a Dockerfile/build itself.
+- **`docker-compose.registry.yml`** — pulls the published `:latest` images from Harbor instead of building. Verifies what CI actually shipped, and needs only Docker (no `dotnet`/`node` toolchain) since the `todo-app` project is public.
+
+Both need a backend cert (`.pfx`, for Kestrel) and a frontend cert (`.crt`/`.key`, for nginx) mounted in, plus the `.pfx`'s password as `CERT_PASSWORD` — a one-time setup step, and a helper script does all of it:
+
+```sh
+scripts/setup-compose-certs.sh
+```
+
+This generates both certs (skipping any that already exist, so it's safe to re-run) and prints an `export CERT_PASSWORD=...` line with a freshly generated password — copy/run that line, then bring the stack up:
+
+```sh
+docker compose up --build                                          # build from source
+docker compose -f docker-compose.registry.yml up --pull always     # pull from Harbor instead
+```
+
+Backend: `https://localhost:8443` (Scalar UI at `/scalar` in Development). Frontend: `https://localhost:8444`. Both compose files include a one-shot `data-init` service that fixes SQLite volume permissions for the container's non-root user — see the compose files' own comments for why. See [`docs/infra/container-image.md`](docs/infra/container-image.md) and [`docs/infra/container-image-frontend.md`](docs/infra/container-image-frontend.md) for the certs' full design rationale, and [`docs/infra/dockerfile-organization.md`](docs/infra/dockerfile-organization.md) for why these files live at the repo root rather than under `docker/`.
 
 ## Running Tests
 
@@ -56,7 +95,7 @@ Full rationale for every architectural decision lives under [`docs/`](docs/) —
 - **Minimal API, endpoint-per-class** — each HTTP operation (Add, List, View, Update, Complete/Incomplete, Delete) is its own class implementing a shared `IEndpoint` interface, not a controller action. Complete and Incomplete share one endpoint (`PATCH /todos/{id}`, driven by an `isCompleted` value) rather than two, since both are the same "set completion status to X" operation. Single responsibility at the endpoint level.
 - **CQRS without a mediator library** — commands and queries are separated, but dispatched via direct DI injection of a named interface per handler (e.g. `IAddTodoCommandHandler`), not a mediator like MediatR. See [`docs/architecture/backend/cqrs.md`](docs/architecture/backend/cqrs.md) for why (licensing) and how.
 - **DTOs never cross below the service tier** — the service tier validates the incoming DTO and maps it to a domain Model; everything below (CQRS handlers, repository, persistence) only ever sees Models. Mapping is hand-written (`ToModel()`/`ToResponse()` extension methods) — no AutoMapper (licensing) and no Mapster (the source-generator package it originally called for doesn't exist on NuGet; the real CLI-codegen alternative wasn't worth the build-lag trade-off for a model this small).
-- **Persistence: EF Core + SQLite** — a deliberate choice beyond the requirements' "file-based or in-memory is sufficient" minimum, to demonstrate real ORM usage. See [`docs/architecture/backend/overview.md#persistence`](docs/architecture/backend/overview.md#persistence).
+- **Persistence: EF Core + SQLite** — goes beyond the requirements' "file-based or in-memory is sufficient" minimum, and in practice was less effort than hand-rolling file-based storage: migrations/DbContext handle schema versioning and concurrent-write safety that a JSON/CSV store would need built from scratch. See [`docs/architecture/backend/overview.md#persistence`](docs/architecture/backend/overview.md#persistence).
 - **Error responses:** RFC 9457 Problem Details, ASP.NET Core's built-in convention — no custom error DTO.
 - **API contract:** OpenAPI spec generated at build time from endpoint metadata, committed to the repo, consumed by a generated TypeScript client (orval) on the frontend side. No hand-written API client. **Scalar** provides the interactive UI for manually exercising the API in Development (Swagger UI's replacement now that it's out of the default .NET template).
 
@@ -83,7 +122,7 @@ Key assumptions:
 
 ## Trade-offs
 
-- **EF Core + SQLite instead of the simplest option.** The requirements say file-based or in-memory storage is sufficient. EF Core + SQLite goes beyond that minimum specifically to demonstrate real ORM usage (migrations, change tracking, LINQ) — at the cost of more setup than a hand-rolled JSON file would need.
+- **EF Core + SQLite instead of the literal minimum.** The requirements say file-based or in-memory storage is sufficient, and a hand-rolled JSON/CSV store would satisfy that literally. In practice EF Core + SQLite wasn't a heavier option chosen for its own sake — migrations/DbContext absorb schema versioning and concurrent-write safety that a hand-rolled store would need to reimplement, so it ended up being the lower-effort path as well as the more capable one.
 - **Modular monolith (Gateway + feature library) for a single-feature app.** Reflects a pattern used for multi-service work — the payoff (a feature boundary that already exists as a project reference) is mostly about not having to restructure later, not about anything gained today with only one feature.
 - **CQRS with named interfaces per handler, no mediator library.** Gets shape/consistency and decorator-readiness without a runtime dispatch mechanism this project's scale doesn't need — see [`docs/architecture/backend/cqrs.md`](docs/architecture/backend/cqrs.md) for what's explicitly given up by not using a mediator (automatic pipeline behaviors, full caller/handler decoupling).
 
@@ -109,14 +148,22 @@ This repo's design decisions are documented as they were made, not written up af
 
 - [`docs/standards/aspnet-web-api-guidelines.md`](docs/standards/aspnet-web-api-guidelines.md) — backend coding standards (DI, single responsibility, cyclomatic complexity, error responses, style)
 
-**Feature Specs**
+**Feature Specs — Backend**
 
-- [`docs/features/add-todo/spec.md`](docs/features/add-todo/spec.md) — `POST /todos`: full `TodoModel` schema, DTO contract, validation, mapping, CQRS, persistence, and test plan for the first endpoint
-- [`docs/features/list-todos/spec.md`](docs/features/list-todos/spec.md) — `GET /todos`: first read endpoint and first CQRS query; bare-array contract, `IQueryHandler<,>`, and the ordering/filtering deferral
-- [`docs/features/get-todo-by-id/spec.md`](docs/features/get-todo-by-id/spec.md) — `GET /todos/{id}`: the View requirement; first route parameter, first `404` outcome, and the RFC 9457 not-found contract
-- [`docs/features/update-todo/spec.md`](docs/features/update-todo/spec.md) — `PUT /todos/{id}`: the Update requirement; full-resource replacement (including `isCompleted`), first CQRS command with a real existence-check rule
-- [`docs/features/delete-todo/spec.md`](docs/features/delete-todo/spec.md) — `DELETE /todos/{id}`: the Delete requirement; hard delete, `204` on success
-- [`docs/features/update-completion-status/spec.md`](docs/features/update-completion-status/spec.md) — `PATCH /todos/{id}`: the Complete/Incomplete requirements, collapsed into one endpoint that dispatches through `UpdateTodo`'s existing command rather than a new write path
+- [`docs/features/backend/add-todo/spec.md`](docs/features/backend/add-todo/spec.md) — `POST /todos`: full `TodoModel` schema, DTO contract, validation, mapping, CQRS, persistence, and test plan for the first endpoint
+- [`docs/features/backend/list-todos/spec.md`](docs/features/backend/list-todos/spec.md) — `GET /todos`: first read endpoint and first CQRS query; bare-array contract, `IQueryHandler<,>`, and the ordering/filtering deferral
+- [`docs/features/backend/get-todo-by-id/spec.md`](docs/features/backend/get-todo-by-id/spec.md) — `GET /todos/{id}`: the View requirement; first route parameter, first `404` outcome, and the RFC 9457 not-found contract
+- [`docs/features/backend/update-todo/spec.md`](docs/features/backend/update-todo/spec.md) — `PUT /todos/{id}`: the Update requirement; full-resource replacement (including `isCompleted`), first CQRS command with a real existence-check rule
+- [`docs/features/backend/delete-todo/spec.md`](docs/features/backend/delete-todo/spec.md) — `DELETE /todos/{id}`: the Delete requirement; hard delete, `204` on success
+- [`docs/features/backend/update-completion-status/spec.md`](docs/features/backend/update-completion-status/spec.md) — `PATCH /todos/{id}`: the Complete/Incomplete requirements, collapsed into one endpoint that dispatches through `UpdateTodo`'s existing command rather than a new write path
+
+**Feature Specs — Frontend**
+
+- [`docs/features/frontend/main-route.md`](docs/features/frontend/main-route.md) — `/` (`TodoListRoute`): List + Add, first wiring of the generated API client into the app
+- [`docs/features/frontend/detail-route.md`](docs/features/frontend/detail-route.md) — `/todos/:id` (`TodoDetailRoute`): the View requirement, read-only to start
+- [`docs/features/frontend/delete-todo.md`](docs/features/frontend/delete-todo.md) — Delete, added to `TodoDetailRoute` with a confirmation dialog; first mutation on that route
+- [`docs/features/frontend/toggle-completion.md`](docs/features/frontend/toggle-completion.md) — Complete/Incomplete, collapsed into a single toggle button, second `intent` branch on `TodoDetailRoute.action.ts`
+- [`docs/features/frontend/edit-todo.md`](docs/features/frontend/edit-todo.md) — Update: title, description, due date, reusing `TodoForm`'s edit mode
 
 **Infrastructure**
 

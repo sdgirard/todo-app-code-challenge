@@ -316,7 +316,7 @@ Not previously addressed anywhere in the architecture docs, and this is the firs
 
 ## Tests
 
-Per-layer, following the split named as an open item in [`overview.md#resolved-formerly-open-questions--todo`](../../architecture/backend/overview.md#resolved-formerly-open-questions--todo) — this spec is the first to actually write that strategy down in practice:
+Per-layer, following the split described in [`aspnet-web-api-guidelines.md#testing`](../../../standards/aspnet-web-api-guidelines.md#testing) — this spec is the first to actually write that strategy down in practice:
 
 - **`TodoApi.Todos.Tests`**
   - `RequestValidator`: empty/whitespace `Title` fails; `Title`/`Description` over their max length fail; a past `DueDate` fails, today/future/`null` `DueDate` passes; valid `Title` with/without optional fields passes.

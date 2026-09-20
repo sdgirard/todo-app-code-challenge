@@ -1,0 +1,84 @@
+# Local compose setup for testing the two built images (todo-app-gateway, todo-app-web)
+# together, the way they'd actually run in the cluster — not a dev inner-loop replacement
+# for `dotnet run`/`npm run dev` (see README.md's Quickstart for that).
+#
+# Prerequisites (see docs/infra/container-image.md and container-image-frontend.md):
+#   - Backend cert:  dotnet dev-certs https -ep ./certs/todo-app.pfx -p <password>
+#   - Frontend cert: openssl req -x509 -newkey rsa:2048 -nodes \
+#                       -keyout ./frontend/certs/todo-app.key \
+#                       -out ./frontend/certs/todo-app.crt -days 365 -subj "/CN=localhost"
+#     (or dotnet dev-certs https -ep ./frontend/certs/todo-app.crt --format PEM, SDK-dependent)
+#   - CERT_PASSWORD env var set to the password used above (not committed, not defaulted)
+#
+# Usage:
+#   CERT_PASSWORD=<password> docker compose up --build
+#   Backend:  https://localhost:8443/scalar (Development only) — see docs/architecture/backend/overview.md
+#   Frontend: https://localhost:8444
+#
+# Both images bind HTTPS on 8443 inside their containers (see container-image.md /
+# container-image-frontend.md); published as 8443/8444 on the host to avoid colliding
+# with each other and with the dotnet run/vite dev ports (7020/5173) from the Quickstart path.
+#
+# The frontend reads its API base URL at container *startup*, not build time (see
+# docs/infra/container-image-frontend.md#runtime-api-base-url) — API_BASE_URL below is
+# set to the backend's host-published port (8443), not a Docker-network service name,
+# because the browser itself makes the fetch, not the web container.
+
+services:
+  # One-shot init: a fresh named volume is owned by root, but the gateway image
+  # runs as the non-root `app` user and can't write to it otherwise — SQLite
+  # fails with "unable to open database file" on first run without this.
+  # Mirrors the kind of initContainer a real K8s pod spec would need for the
+  # same PVC-permissions reason. UID 1654 is `app`'s actual UID in the
+  # mcr.microsoft.com/dotnet/aspnet:10.0 base image as built here — the 64198
+  # figure in container-image.md#runtime-user doesn't match this image/tag;
+  # confirmed via `docker exec <container> id`, worth correcting in that doc.
+  data-init:
+    image: busybox
+    command: ["sh", "-c", "chown -R 1654:1654 /data"]
+    volumes:
+      - todo-data:/data
+
+  gateway:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.gateway
+    image: todo-app-gateway:local
+    ports:
+      - "8443:8443"
+    environment:
+      # Path is not sensitive (see container-image.md#cert-format-pfxpkcs12); password is
+      # supplied via env here only as the local-compose equivalent of the mounted-secret-file
+      # approach the K8s deployment uses (see docs/infra/outstanding-items.md — that wiring
+      # isn't implemented in Program.cs yet).
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${CERT_PASSWORD:?Set CERT_PASSWORD to the backend .pfx password}
+      ASPNETCORE_ENVIRONMENT: Development
+    volumes:
+      - ./certs:/certs:ro
+      - todo-data:/data
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    image: todo-app-web:local
+    ports:
+      - "8444:8443"
+    environment:
+      API_BASE_URL: https://localhost:8443
+    volumes:
+      - ./frontend/certs:/certs:ro
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+volumes:
+  # Persists the SQLite file across `compose down`/`up` cycles, mirroring the PVC mount
+  # the home-lab deployment uses at /data — see
+  # docs/architecture/backend/overview.md#where-the-sqlite-file-lives.
+  # `compose down -v` drops it for a clean-slate run.
+  todo-data:

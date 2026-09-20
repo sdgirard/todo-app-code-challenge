@@ -6,10 +6,10 @@ Covers the React SPA described in [`../overview-architecture.md`](../overview-ar
 
 ## Approach
 
-- **React Router's data APIs (loaders/actions) are the data layer — no separate state-management or data-fetching library.** A route's `loader` fetches what that route needs before it renders; a route's `action` handles the corresponding form submission (add/update/delete/complete). Router re-runs the loader after an action completes, so the list view refreshes itself after a mutation with no manual cache invalidation or "refetch" call to wire up. This was chosen over adding a query library (e.g. TanStack Query) specifically because it's a capability of a dependency already committed to (React Router itself, per [`../overview-architecture.md`](../overview-architecture.md)), not a new one to learn, explain, and justify in the README for a six-endpoint CRUD app. Revisit only if the data-fetching needs grow past what loaders/actions comfortably express (e.g. real-time updates, complex cross-route cache sharing) — not a need this app has.
-- **No global client-state store (Redux/Zustand/Context-as-store).** Server state (the todo list) lives in loader data, which React Router already caches per-route; there is no other cross-cutting client state in this app (no auth session, no theme, no multi-step wizard) that would justify one. `useState` is enough for local, component-scoped UI state (an open/closed form, an input's current value before submit).
-- **Tailwind CSS, not a component library.** Considered Ant Design (familiar from prior work) and MUI — both ruled out as more dependency than a to-do list's form/list/button surface needs, and the requirements explicitly de-emphasize visual polish (see [`../../requirements/requirements.md`](../../requirements/requirements.md#overview)). Tailwind styles plain semantic HTML with utility classes; no component API to learn, configure, or explain. Same "don't add ceremony the project doesn't need" reasoning the backend doc already applies to AutoMapper/MediatR/Mapster.
-- **Generated API client only — no hand-written `fetch` calls.** orval generates a typed client (functions + TypeScript types) from the backend's committed `openapi.json` as a frontend pre-build step. Loaders and actions call the generated functions directly; nothing in the app constructs a request URL or parses a response body by hand. See [API Contract & Client Generation](#api-contract--client-generation) below.
+- **React Router's data APIs (loaders/actions) are the data layer** — no separate state-management or data-fetching library. A route's `loader` fetches its data; its `action` handles the matching form submission. Router re-runs the loader after an action, so views refresh with no manual cache invalidation. Already a capability of a dependency this app commits to, not a new one to add.
+- **No global client-state store.** Server state lives in loader data; `useState` covers local UI state. Nothing else in this app needs cross-cutting client state.
+- **Tailwind CSS, not a component library.** Utility classes on plain HTML — no component API to learn, and the requirements de-emphasize visual polish. See [Styling](#styling) below.
+- **Generated API client only** — no hand-written `fetch` calls. orval generates a typed client from the backend's committed `openapi.json`; loaders/actions call it directly. See [API Contract & Client Generation](#api-contract--client-generation) below.
 
 ## Directory Structure
 
@@ -60,7 +60,7 @@ frontend/
 
 See [`../overview-architecture.md#repo-layout`](../overview-architecture.md#repo-layout) for where `frontend/` sits relative to `backend/`.
 
-**One route pair per screen, one file per concern within it** — a route component (`.tsx`), its loader, and its action are separate files rather than all colocated in one, unlike the backend's endpoint-per-file pattern. React Router's convention (and most examples/tooling) treats loader/action as named exports importable independently of the component, and keeping them in separate files makes each one easier to unit test in isolation (a loader is just an async function; it doesn't need React Testing Library to test). This is a deliberate divergence from the backend's "everything about one HTTP call lives in one file" rule, not an oversight — the backend's Request/Response/Validator all describe the *same* HTTP contract, where a route's component/loader/action are three different concerns (rendering, reading, writing) that happen to share a URL.
+**One route pair per screen, one file per concern within it** — the route component, its loader, and its action are separate files, unlike the backend's endpoint-per-file pattern. This follows React Router's own convention and keeps each piece easy to unit test in isolation (a loader is just an async function, no RTL needed). A deliberate divergence, not an oversight: the backend's Request/Response/Validator describe one HTTP contract, while a route's component/loader/action are three different concerns that just happen to share a URL.
 
 ## Routes → Backend Operations
 
@@ -117,7 +117,7 @@ sequenceDiagram
     Router-->>Form: re-renders with useActionData() errors, or navigates away
 ```
 
-Client-side field validation (required `title`, max lengths) runs in `TodoForm` before submit purely for fast feedback — it is **not** the source of truth. The action still calls the generated client, which still hits the real backend validator; a `400 ValidationProblem` response is caught in the action and returned (not thrown) so `useActionData()` can surface field-level errors next to the form. This mirrors the backend's own two-tier validation split ([`../backend/overview.md`](../backend/overview.md#approach)): client-side checks are the UX layer, the server is still the actual authority, exactly as the backend treats its own DTO validation as "is this well-formed" rather than the final word.
+Client-side validation in `TodoForm` (required `title`, max lengths) is UX-only fast feedback, not the source of truth — the server is still the real authority, mirroring the backend's own two-tier split ([`../backend/overview.md`](../backend/overview.md#approach)). The action always calls the generated client; a `400 ValidationProblem` is caught and returned (not thrown) so `useActionData()` can surface field-level errors next to the form.
 
 ## Error Handling
 
@@ -163,18 +163,11 @@ Mirrors the backend's per-layer split ([`../backend/overview.md`](../backend/ove
 
 ## API Base URL & Local Dev Origin
 
-The generated client (see [API Contract & Client Generation](#api-contract--client-generation)) needs to know where the backend actually lives, and the backend's CORS policy (see [`../backend/overview.md#bootstrapping`](../backend/overview.md#bootstrapping), first addressed in [`../../features/add-todo/spec.md#cors`](../../features/add-todo/spec.md#cors)) needs to allow whatever origin the frontend actually runs on — that origin was left as "whatever the frontend spec settles on" when the backend CORS policy was written, so it's settled here:
+Settles the frontend origin the backend's CORS policy ([`../backend/overview.md#bootstrapping`](../backend/overview.md#bootstrapping)) left open:
 
-- **Base URL: `VITE_API_BASE_URL`**, a Vite env variable (`.env.development`, gitignored per-developer overrides allowed via `.env.development.local`) read at build time and baked into the generated client's request calls. Not hardcoded in `src/api/generated/`, since that directory is regenerated and shouldn't need hand-editing to point at a different backend.
-- **Local dev origin: `https://localhost:5173`.** Per [`../../infra/deployment.md#tls`](../../infra/deployment.md#tls), the app never runs over plain HTTP in any environment — that constraint applies to the Vite dev server too, not just the backend. Vite's dev server is configured (`vite.config.ts`, `server.https`) to use the same ASP.NET Core dev HTTPS certificate (`dotnet dev-certs https`, exported once to a form Vite/Node can load) already used for the backend's own local HTTPS, rather than introducing a second, separate cert mechanism for the frontend alone. `VITE_API_BASE_URL=https://localhost:7020` (the Gateway's HTTPS dev port) in `.env.development`.
-- This closes the loop the backend's `"Frontend"` CORS policy left open: it allows `https://localhost:5173` specifically (not plain `http://`), matching the origin above exactly, since CORS matches on scheme+host+port and a mismatch here (e.g. forgetting `https://`) is a broken-fetch bug that only shows up at runtime, not compile time.
-- **Demo/production origin and base URL:** not decided here — same as the backend spec's own deferral, this depends on the still-TODO [`../../infra/deployment.md#environments`](../../infra/deployment.md#environments) (how the built SPA is actually served and at what hostname in the home-lab deployment). Settle both the CORS origin and `VITE_API_BASE_URL`'s production value together, in that doc, when the deployment story is written.
-
-## Resolved / Open Questions
-
-- **State management library** — resolved: none. React Router loader data + local `useState` covers everything this app needs (see [Approach](#approach)).
-- **Form library** (e.g. React Hook Form) — resolved: not used. Two fields' worth of controlled inputs plus one hidden `intent` field per form doesn't justify a form library; plain controlled components are enough, and client-side validation is UX-only anyway (see [Data Flow (Write Path)](#data-flow-write-path)).
-- **Route-level code splitting / lazy loading** — not addressed; two routes is not enough surface for splitting to matter. Revisit only if the route tree grows substantially.
+- **Base URL:** `VITE_API_BASE_URL`, a Vite env variable (`.env.development`) baked into the generated client at build time — not hardcoded in `src/api/generated/`, since that directory is regenerated. The containerized build reads it at container *startup* instead (`window.__ENV__`, generated by `docker/docker-entrypoint.sh`), since a published image needs to work against different backend URLs without a rebuild — see [`../../infra/container-image-frontend.md#runtime-api-base-url`](../../infra/container-image-frontend.md#runtime-api-base-url).
+- **Local dev:** `VITE_API_BASE_URL=https://localhost:7020`, origin `https://localhost:5173`. Vite's dev server uses the same dev HTTPS cert as the backend (`server.https` in `vite.config.ts`), per the TLS-everywhere rule in [`../../infra/deployment.md#tls`](../../infra/deployment.md#tls). The backend's `"Frontend"` CORS policy allows exactly this origin.
+- **Demo/production:** not decided — depends on the still-TODO [`../../infra/deployment.md#environments`](../../infra/deployment.md#environments) (how/where the built SPA is served). Settle the CORS origin and `VITE_API_BASE_URL` together when that's written.
 
 ## Related Docs
 

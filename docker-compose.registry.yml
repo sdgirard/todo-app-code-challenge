@@ -1,0 +1,58 @@
+# Pulls the published images from Harbor instead of building from local source —
+# verifies what CI actually built and pushed, not a fresh local rebuild that could
+# diverge from it (different layer cache, uncommitted Dockerfile changes, etc.).
+# The `todo-app` Harbor project is public (pull only, no login needed) specifically
+# so this works with no registry auth — see
+# docs/infra/harbor-registry-setup.md#project-visibility-public-dedicated-project.
+#
+# For active Dockerfile/source development, use docker-compose.yml (builds locally)
+# instead — this file is for confirming the published :latest images work, e.g.
+# right after a CI push, or when reviewing without a full dotnet/node toolchain.
+#
+# Prerequisites and usage are otherwise identical to docker-compose.yml — see that
+# file's header for cert setup and CERT_PASSWORD. No local build step here, so
+# `docker compose -f docker-compose.registry.yml up` doesn't need --build and pulls
+# instead:
+#
+#   CERT_PASSWORD=<password> docker compose -f docker-compose.registry.yml pull
+#   CERT_PASSWORD=<password> docker compose -f docker-compose.registry.yml up
+
+services:
+  data-init:
+    image: busybox
+    command: ["sh", "-c", "chown -R 1654:1654 /data"]
+    volumes:
+      - todo-data:/data
+
+  gateway:
+    image: docker.thecameraeye.ca/todo-app/todo-app-gateway:latest
+    ports:
+      - "8443:8443"
+    environment:
+      ASPNETCORE_Kestrel__Certificates__Default__Password: ${CERT_PASSWORD:?Set CERT_PASSWORD to the backend .pfx password}
+      ASPNETCORE_ENVIRONMENT: Development
+    volumes:
+      - ./certs:/certs:ro
+      - todo-data:/data
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    image: docker.thecameraeye.ca/todo-app/todo-app-web:latest
+    ports:
+      - "8444:8443"
+    environment:
+      # Set at container startup, not baked into the image at build time — see
+      # docs/infra/container-image-frontend.md#runtime-api-base-url. Points at the
+      # backend's host-published port since the browser makes the fetch, not this container.
+      API_BASE_URL: https://localhost:8443
+    volumes:
+      - ./frontend/certs:/certs:ro
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+volumes:
+  todo-data:

@@ -6,10 +6,14 @@ How multiple Dockerfiles are laid out and named now that there's more than one d
 
 ```text
 todo-app-code-challenge/
+├── docker-compose.yml           # local: builds both images from source — see below
+├── docker-compose.registry.yml # local: pulls both published images from Harbor instead
 ├── docker/
-│   ├── Dockerfile.gateway      # backend (TodoApi.Gateway) — see container-image.md
-│   ├── Dockerfile.app          # frontend SPA — see container-image-frontend.md
-│   └── nginx.conf              # frontend's nginx config, copied into Dockerfile.app's runtime stage
+│   ├── Dockerfile.gateway         # backend (TodoApi.Gateway) — see container-image.md
+│   ├── Dockerfile.app             # frontend SPA — see container-image-frontend.md
+│   ├── nginx.conf                 # frontend's nginx config, copied into Dockerfile.app's runtime stage
+│   ├── docker-entrypoint.sh       # frontend runtime API_BASE_URL substitution — see container-image-frontend.md#runtime-api-base-url
+│   └── env-config.js.template     # template docker-entrypoint.sh substitutes into dist/env-config.js
 ├── .dockerignore
 ├── backend/
 ├── frontend/
@@ -17,6 +21,8 @@ todo-app-code-challenge/
 ```
 
 **Decided against** a `Dockerfile` inside each service directory (`backend/Dockerfile`, `frontend/Dockerfile`). A shared `docker/` directory, one file per service, matches the pattern already used in other projects (e.g. `garmin-fit-converter`'s `docker/Dockerfile.zwiftDeviceSwitcher`) — container-build concerns stay grouped in one place, separate from application source, and both Dockerfiles are visible together rather than requiring a hunt through `backend/` and `frontend/` to find them. The tradeoff (`COPY` paths inside each Dockerfile are relative to the repo-root build context, not the service directory) is minor and already how `docker/Dockerfile.gateway` is written (`COPY backend/src/ backend/src/`).
+
+**The two `docker-compose*.yml` files live at the repo root, not inside `docker/`.** They're a different kind of thing from the Dockerfiles: a Dockerfile is a per-service build recipe, grouped with its sibling for that reason; a compose file is a whole-repo orchestration file describing how the already-built (or pulled) images relate to each other — ports, volumes, cert mounts from both `certs/` and `frontend/certs/`, startup order — a repo-level concern, not a per-Dockerfile one. Practically, `docker compose` also looks for `docker-compose.yml` in the current directory by default; nesting it under `docker/` would mean every invocation needs `-f docker/docker-compose.yml`, friction the tool is designed to avoid. Both files still reference `docker/Dockerfile.gateway`/`docker/Dockerfile.app` by relative path, same as any other repo-root tooling would.
 
 **Build context is always the repo root**, not `docker/` — each Dockerfile is invoked with `-f docker/Dockerfile.<name>` but a plain `.` context, same as today:
 

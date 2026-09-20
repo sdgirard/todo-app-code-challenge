@@ -51,6 +51,13 @@ FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /src/dist /usr/share/nginx/html
 
+# Runtime (not build-time) API base URL — see
+# docs/infra/container-image-frontend.md#runtime-api-base-url and
+# docker/docker-entrypoint.sh. envsubst ships in nginx:alpine already (gettext),
+# no extra package needed.
+COPY docker/env-config.js.template /usr/share/nginx/html/env-config.js.template
+COPY docker/docker-entrypoint.sh /docker-entrypoint.sh
+
 # Cert is mounted at runtime, never baked into the image — same convention as
 # docker/Dockerfile.gateway, see docs/infra/container-image-frontend.md#tls.
 # PEM format (not .pfx) since nginx, unlike Kestrel, doesn't consume PKCS12.
@@ -66,7 +73,12 @@ EXPOSE 8443
 # rather than relying on the base image's own startup behavior.
 RUN chown -R nginx:nginx /var/cache/nginx /usr/share/nginx/html && \
     touch /var/run/nginx.pid && \
-    chown nginx:nginx /var/run/nginx.pid
+    chown nginx:nginx /var/run/nginx.pid && \
+    chmod +x /docker-entrypoint.sh
 USER nginx
 
-ENTRYPOINT ["nginx", "-g", "daemon off;"]
+# entrypoint must end with `exec "$@"` (it does, see docker-entrypoint.sh) so nginx
+# itself is PID 1 and receives SIGTERM directly on `docker stop` — same reasoning as
+# the backend's debug-mode wrapper, see docs/infra/container-image.md#remote-debugging-enable_debug-build-arg.
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

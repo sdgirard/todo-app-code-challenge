@@ -6,14 +6,10 @@ Covers the ASP.NET Core Minimal API backend described in [`../overview-architect
 
 ## Approach
 
-- **Minimal API** — each endpoint is a small, single-responsibility handler (single responsibility principle applied at the endpoint level, not just the class level). No controller classes; each route maps directly to a thin handler that delegates out immediately.
-- **CQRS** — commands and queries are separated, with no mediator library. See [`cqrs.md`](./cqrs.md) for the full pattern.
-- **Two layers of validation, two different jobs:**
-  - **Service tier (DTO-level validation):** shape/presence checks on the incoming request — is `title` present, is `dueDate` a parseable date, is the request well-formed. This is "is the request valid input," not "is this allowed."
-  - **CQRS handlers (business logic / stricter rules):** domain rules enforced here — e.g. rules that depend on existing state or domain invariants, not just the shape of one request. This is "is this operation allowed to happen."
-- **DTOs never cross below the service tier.** The service tier is the boundary: it validates the incoming DTO, then maps it to a domain Model before handing anything to CQRS. Commands, queries, handlers, and the repository/persistence layer only ever see Models — never the API's DTO types. This keeps the API contract (DTO shape) decoupled from the domain model, so either can change without forcing a change in the other.
-
-The split matters because it keeps cheap, request-shaped checks (DTO validation) from being tangled up with the kind of check that needs to know about the rest of the system (business rules). Endpoint handlers stay dumb; CQRS handlers stay focused on one command or query each, working only with domain Models.
+- **Minimal API** — one small, single-responsibility handler per endpoint, no controller classes. Each route maps directly to a thin handler that delegates out immediately.
+- **CQRS** — commands and queries are separated, each with its own handler, applying the same single-responsibility principle one layer down from the endpoint. No mediator library. See [`cqrs.md`](./cqrs.md) for the full pattern.
+- **Two layers of validation:** the service tier checks the DTO is well-formed ("is this valid input?"); CQRS handlers enforce domain rules ("is this operation allowed?").
+- **DTOs never cross below the service tier.** The service tier validates the DTO and maps it to a domain Model before handing off — CQRS handlers, the repository, and persistence only ever see Models. Keeps the API contract free to change independently of the domain model.
 
 ## Directory Structure
 
@@ -75,11 +71,11 @@ See [`../overview-architecture.md#repo-layout`](../overview-architecture.md#repo
 
 ## Persistence
 
-**EF Core + SQLite.** The requirements doc says file-based storage or an in-memory store is sufficient — a full database isn't required. EF Core is a deliberate choice beyond that minimum, to demonstrate real ORM usage (DbContext, migrations, change tracking, LINQ queries) rather than the simplest thing that satisfies the requirement. SQLite keeps that choice compatible with "file-based storage is sufficient": the whole database is one file, no separate DB server to run or deploy.
+**EF Core + SQLite.** The requirements doc says file-based storage or an in-memory store is sufficient — a full database isn't required. EF Core was chosen anyway, and not purely to demonstrate ORM usage: in practice it was *less* work than hand-rolling file-based storage would have been. `DbContext`/migrations handle schema versioning, change tracking, and atomic writes for free; a hand-rolled JSON/CSV store would have needed its own serialization, concurrent-write handling, and ad hoc versioning logic built from scratch. It also happens to demonstrate real ORM usage (DbContext, migrations, change tracking, LINQ queries) as a side benefit. SQLite keeps the choice compatible with "file-based storage is sufficient": the whole database is one file, no separate DB server to run or deploy.
 
 Considered and ruled out:
 
-- **Hand-rolled file-based storage (JSON/CSV)** — satisfies the requirements literally, but doesn't demonstrate anything about EF Core, data modeling, or migrations.
+- **Hand-rolled file-based storage (JSON/CSV)** — satisfies the requirements literally, but would have meant writing (and testing) atomic-write and concurrent-access handling that EF Core already provides, for no time savings.
 - **EF Core In-Memory provider** — satisfies "in-memory store is acceptable" literally, but Microsoft explicitly documents it as unsuited for real application use (no real relational semantics, some LINQ translations behave differently from a real provider) — it's a testing tool, not a persistence choice for a running app.
 - **EF Core + Postgres/SQL Server** — a real server-based database is feasible given the home lab, but adds real infra (a running DB service, connection management, backups) beyond what this project's scope calls for.
 
@@ -123,7 +119,7 @@ Applied automatically at app startup (`dbContext.Database.Migrate()`, called fro
 
 ### Where the SQLite file lives
 
-For the home-lab Kubernetes demo deployment (see [`../../infra/deployment.md`](../../infra/deployment.md)), the SQLite file is written to `/data/todo.db`, a path backed by a **PersistentVolume** mounted into the container, not the container's own ephemeral filesystem — otherwise the to-do list would reset every time the pod restarts or redeploys. The connection string is supplied via config/env (`ConnectionStrings__TodoDb=Data Source=/data/todo.db`), not hardcoded, so it can point at different paths per environment without a rebuild. Full detail (mount conventions, local-dev fallback) in [`../../infra/container-image.md#persistence-sqlite-path-via-data`](../../infra/container-image.md#persistence-sqlite-path-via-data). The PVC/StorageClass definition itself is still TODO in `deployment.md`'s Cluster/Ingress section.
+For the home-lab Kubernetes demo deployment (see [`../../infra/deployment.md`](../../infra/deployment.md)), the SQLite file is written to `/data/todo.db`, a path backed by a **PersistentVolume** mounted into the container, not the container's own ephemeral filesystem — otherwise the to-do list would reset every time the pod restarts or redeploys. The connection string is supplied via config/env (`ConnectionStrings__TodoDb=Data Source=/data/todo.db`), not hardcoded, so it can point at different paths per environment without a rebuild. Full detail (mount conventions, local-dev fallback) in [`../../infra/container-image.md#persistence-sqlite-path-via-data`](../../infra/container-image.md#persistence-sqlite-path-via-data). The PVC/StorageClass definition itself is still TODO in `deployment.md`'s Cluster/Ingress section — the home-lab deployment wasn't a core requirement, and the actual cluster rollout didn't fit in this project's time budget, so it stayed a design (rather than a shipped) decision.
 
 Locally, the file just lives on disk in the working directory (relative path, via `appsettings.Development.json`) — no PVC or mount needed outside the cluster.
 
@@ -192,7 +188,7 @@ Reusing a pattern I've used before on another Minimal API project: each endpoint
 - Each endpoint class implements a shared `IEndpoint` interface with a static `Map(IEndpointRouteBuilder app)` method that registers its own route, name, and DTO validation filter.
 - The endpoint's `Request`/`Response` records and its `RequestValidator` (DTO-level validation) live right next to the `Map`/`Handle` methods, in the same file — everything about "how this one HTTP call is shaped" stays together.
 - The `Handle` method is a thin static handler: bind request → call the CQRS command/query handler → map the result to a typed HTTP response (`TypedResults.Ok`, `TypedResults.NotFound`, etc.) → done. No business logic here.
-- Endpoints are grouped by feature and registered from a single place (`app.MapGroup("/todos")...MapEndpoint<AddTodoEndpoint>()...`), so the route table is readable in one spot without hunting through controller classes.
+- Endpoints are grouped by resource/route prefix (`app.MapGroup("/todos")...MapEndpoint<AddTodoEndpoint>()...`) and registered from a single place, so the route table is readable in one spot without hunting through controller classes.
 
 Each CRUD/status operation gets its own endpoint class under this pattern, rather than one `TodosController` with several actions — with one deliberate exception: Complete and Incomplete share a single `UpdateCompletionStatusEndpoint` class (`PATCH /todos/{id}`, driven by an `isCompleted` value in the request body) rather than two near-identical classes differing only in a hardcoded `true`/`false`. See [`../../features/update-completion-status/spec.md#scope`](../../features/update-completion-status/spec.md#scope) for the reasoning. Six endpoint classes cover the seven requirement-level operations (Add, List, View, Update, Complete/Incomplete, Delete).
 
@@ -344,17 +340,6 @@ graph TB
 - **Application (CQRS):** business rules, working exclusively in domain Models. No knowledge of DTOs or HTTP. See [`cqrs.md`](./cqrs.md) for the dispatch mechanism.
 - **Domain:** the Model types themselves — plain, framework-agnostic where possible.
 - **Infrastructure (Repository/Persistence):** also Model-typed; swapping file-based for in-memory (or a real DB later) shouldn't ripple up past this layer.
-
-## Resolved (formerly Open Questions / TODO)
-
-All six feature endpoints are implemented; the items originally tracked here are resolved:
-
-- ~~Exact command/query list per CRUD operation~~ — resolved: `AddTodoCommand`, `UpdateTodoCommand` (also backs Complete/Incomplete — see [`../../features/update-completion-status/spec.md#cqrs`](../../features/update-completion-status/spec.md#cqrs), no separate command was added), `DeleteTodoCommand`; `ListTodosQuery`, `GetTodoByIdQuery`. Full detail in [`cqrs.md`](./cqrs.md#registration) and each feature's own spec.
-- ~~`IEndpoint` interface shape and shared endpoint-mapping helper~~ — resolved: `IEndpoint.cs` (a `static abstract void Map(IEndpointRouteBuilder app)` member) and the private `MapEndpoint<TEndpoint>()` helper in `Endpoints.cs`, both shown above, are what shipped.
-- ~~SQLite package/connection string configuration, exact PVC mount path, local dev file path~~ — resolved: see [Where the SQLite file lives](#where-the-sqlite-file-lives) above. The PVC/StorageClass definition itself remains TODO in `deployment.md`'s Cluster/Ingress section — an infra item, not a backend-code one.
-- ~~Testing strategy per layer~~ — resolved: `RequestValidator` rules, `TodoMapping` methods, and CQRS command/query handlers are unit tested with `Mock<ITodoRepository>` (Moq) in `TodoApi.Todos.Tests`; each endpoint's full HTTP contract is integration tested via `WebApplicationFactory` (repository still mocked) in `TodoApi.Gateway.Tests`. See [`../../standards/aspnet-web-api-guidelines.md#testing`](../../standards/aspnet-web-api-guidelines.md#testing) for the full writeup, including the real/mocked persistence trade-off this approach accepts.
-- ~~`Mapster.SourceGenerator` NuGet package reference/version~~ — resolved: no mapping library used at all; hand-written `{Feature}Mapping` extension methods instead (see Mapping section above).
-- CQRS dispatch mechanism specifics — see [`cqrs.md`](./cqrs.md) for the final registration list and the `IUpdateTodoCommandHandler`-has-two-callers exception.
 
 ## Error Response Contract
 

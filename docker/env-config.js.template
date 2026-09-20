@@ -1,0 +1,6 @@
+// Generated at container startup by docker-entrypoint.sh via envsubst — see
+// docs/infra/container-image-frontend.md#runtime-api-base-url. Loaded before the
+// app bundle (index.html) so window.__ENV__ exists when the app reads it.
+window.__ENV__ = {
+  API_BASE_URL: "${API_BASE_URL}",
+}

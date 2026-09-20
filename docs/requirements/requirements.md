@@ -91,7 +91,7 @@ Provide the following capabilities through the chosen interface:
 ## Decisions Made
 
 - **Commit history:** Will follow personal practice of squashing before submission rather than keeping partial/WIP check-ins — no intermediate commits expected.
-- **Persistence:** EF Core + SQLite, going beyond the "file-based or in-memory is sufficient" minimum to demonstrate real ORM usage (migrations, change tracking, LINQ). SQLite keeps it compatible with the spirit of file-based storage — one file, no separate DB server. See [`../architecture/backend/overview.md#persistence`](../architecture/backend/overview.md#persistence).
+- **Persistence:** EF Core + SQLite, going beyond the "file-based or in-memory is sufficient" minimum — and, in practice, less work than hand-rolling file-based storage would have been (migrations/DbContext handle schema versioning, atomic writes, and concurrent access that a JSON/CSV store would need built from scratch). Also demonstrates real ORM usage (migrations, change tracking, LINQ) as a side benefit. SQLite keeps it compatible with the spirit of file-based storage — one file, no separate DB server. See [`../architecture/backend/overview.md#persistence`](../architecture/backend/overview.md#persistence).
 
 ## Open Questions / Follow-ups
 

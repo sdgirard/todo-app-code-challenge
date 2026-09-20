@@ -1,6 +1,6 @@
 # Deployment
 
-Status: draft, TLS strategy only for now. Full deployment details (cluster layout, ingress, how the app actually gets deployed) are a separate, later conversation — sections below are TODO placeholders until then.
+Status: draft, TLS strategy only for now. Full deployment details (cluster layout, ingress, how the app actually gets deployed) weren't a core requirement and didn't fit in this project's time budget — sections below are TODO placeholders rather than a shipped deployment.
 
 Demo deployment target: home lab Kubernetes cluster, exposed publicly at **`foci-todo.thecameraeye.ca`** through a public, secure entry point. Image comes from the Harbor registry — see [`harbor-registry-setup.md`](./harbor-registry-setup.md).
 
