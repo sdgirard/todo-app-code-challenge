@@ -57,11 +57,11 @@ docker buildx build -f docker/Dockerfile.gateway --platform linux/amd64,linux/ar
 
 (`--push` is required for a true multi-platform build — `buildx`'s `--load` only supports one platform at a time, matching the host.)
 
-Once `docker/Dockerfile.app` exists, the same commands apply with `-f docker/Dockerfile.app -t .../todo-app-web:latest`.
+The same commands apply to the frontend with `-f docker/Dockerfile.app -t .../todo-app-web:latest`.
 
 ## 4. CI (GitHub Actions) Setup
 
-The workflow at `.github/workflows/docker-publish.yml` builds and pushes to Harbor on every push to `main`, as a matrix job (one entry per image — see [`dockerfile-organization.md`](./dockerfile-organization.md#ci-one-workflow-matrix-build)), using the registry/project values above (hardcoded in the workflow since they're fixed, not secret). The same robot account credentials below push both images — no per-image secret needed.
+Each service's own CI workflow builds and pushes its own image on a push to `main` that touches its paths — `backend-ci.yml`'s `build-and-push` job for `todo-app-gateway`, `frontend-ci.yml`'s for `todo-app-web` — using the registry/project values above (hardcoded in each workflow since they're fixed, not secret). See [`dockerfile-organization.md`](./dockerfile-organization.md#ci-one-workflow-per-service-path-filtered) for why this replaced an earlier single shared `docker-publish.yml` workflow. The same robot account credentials below are used by both workflows — no per-image secret needed.
 
 It needs one **repository secret pair** (Settings → Secrets and variables → Actions → Secrets):
 
@@ -81,11 +81,11 @@ gh secret set HARBOR_ROBOT_TOKEN   # prompts for value, or pipe via stdin
 
 Resolves the "image vulnerability scanning" item tracked in [`outstanding-items.md`](./outstanding-items.md).
 
-**Decision: use Harbor's built-in scanner**, not a dedicated scanning step in `docker-publish.yml`. Harbor ships with [Trivy](https://trivy.dev/) as its default native scanner — enabling it is a one-time project-level configuration change in the Harbor UI, not a CI/Dockerfile change. Since every image already lands on this same registry, there's no new service, secret, or workflow step to introduce; the scan happens where the image already is.
+**Decision: use Harbor's built-in scanner**, not a dedicated scanning step in either CI workflow. Harbor ships with [Trivy](https://trivy.dev/) as its default native scanner — enabling it is a one-time project-level configuration change in the Harbor UI, not a CI/Dockerfile change. Since every image already lands on this same registry, there's no new service, secret, or workflow step to introduce; the scan happens where the image already is.
 
 Considered and ruled out:
 
-- **A dedicated CI scanning step** (Trivy or Grype run directly in `docker-publish.yml`, e.g. `aquasecurity/trivy-action`) — would duplicate what Harbor already does natively on the same image, adds another job/step to maintain, and means findings live in CI logs instead of alongside the image in the registry where they're easiest to find later.
+- **A dedicated CI scanning step** (Trivy or Grype run directly in `backend-ci.yml`/`frontend-ci.yml`, e.g. `aquasecurity/trivy-action`) — would duplicate what Harbor already does natively on the same image, adds another job/step to maintain in two places instead of one, and means findings live in CI logs instead of alongside the image in the registry where they're easiest to find later.
 - **A separate scanning platform/SaaS** (Snyk, etc.) — unnecessary additional account/integration for a project this size; Harbor's native scanner already covers the actual need (OS packages + known application dependency CVEs) without it.
 
 ### Enabling the scanner on `todo-app`
@@ -93,11 +93,11 @@ Considered and ruled out:
 1. In the Harbor UI (as an instance admin, not just a project member), go to **Administration → Interrogation Services**.
 2. Confirm a Trivy scanner is listed and its status is **Healthy**. Most self-hosted Harbor instances ship with Trivy pre-registered at the instance level; this step just confirms it's active, it doesn't need setting up per project.
 3. Go to the **todo-app** project → **Configuration**.
-4. Under **Vulnerability Scanning**, enable **"Automatically scan images on push"** — this is a project-level setting, so it covers every repository under `todo-app` (both `todo-app-gateway` and, later, `todo-app-web`) with no per-image configuration and no change needed to `docker-publish.yml`.
+4. Under **Vulnerability Scanning**, enable **"Automatically scan images on push"** — this is a project-level setting, so it covers every repository under `todo-app` (both `todo-app-gateway` and `todo-app-web`) with no per-image configuration and no change needed to either CI workflow.
 
 ### How it runs
 
-- **Trigger:** automatic, on every push — matches how `docker-publish.yml` already pushes on every merge to `main` (see [`versioning.md`](./versioning.md)).
+- **Trigger:** automatic, on every push — matches how `backend-ci.yml`/`frontend-ci.yml` each push their own image on a merge to `main` that touches their paths (see [`versioning.md`](./versioning.md)).
 - **Scope:** covers every tag, including each platform-specific image inside the multi-arch manifest (see [`container-image.md#multi-arch-linuxamd64--linuxarm64`](./container-image.md#multi-arch-linuxamd64--linuxarm64)).
 - **What it checks:** OS package vulnerabilities (from the Debian base image layers — see [`container-image.md#debian-not-alpine--for-now`](./container-image.md#debian-not-alpine--for-now)) and known-vulnerable application dependencies Trivy can detect from the image's installed packages/lockfiles.
 
@@ -115,7 +115,7 @@ curl -u 'robot$todo-app+<robot-name>:<token>' \
 
 ### Policy: informational only, not blocking the pipeline (for now)
 
-Scanning does not currently fail the `docker-publish.yml` build or block a push. Harbor supports a **"Prevent vulnerable images from running"** project setting (blocks *pulling* above a configured severity) and a CI-side gate is also possible — neither is enabled today.
+Scanning does not currently fail either CI workflow's build or block a push. Harbor supports a **"Prevent vulnerable images from running"** project setting (blocks *pulling* above a configured severity) and a CI-side gate is also possible — neither is enabled today.
 
 **Why deferred:** this is a take-home project's optional containerization enhancement, not a production pipeline with on-call response to a blocked deploy. A hard gate before the base Dockerfile has even shipped once would be premature — there's no baseline yet of what a "clean" scan looks like for this image. Revisit once the Dockerfile exists, a few real scans have run, and it's clear whether findings are actionable (e.g. a fixable OS package CVE) vs. noise (e.g. an unfixed CVE with no upstream patch yet).
 

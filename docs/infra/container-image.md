@@ -6,7 +6,7 @@ Image name/registry/tags are already fixed by [`harbor-registry-setup.md`](./har
 
 ## Scope: backend only
 
-`frontend/` doesn't exist yet. This spec and `docker/Dockerfile.gateway` cover the backend (`TodoApi.Gateway` + `TodoApi.Todos`) only, built and pushed as its own image (`todo-app-gateway`) — see [`dockerfile-organization.md`](./dockerfile-organization.md) for why this is a separate image rather than a combined build, and for the (not-yet-written) frontend Dockerfile's planned location (`docker/Dockerfile.app`) once `frontend/` is scaffolded.
+This spec and `docker/Dockerfile.gateway` cover the backend (`TodoApi.Gateway` + `TodoApi.Todos`) only, built and pushed as its own image (`todo-app-gateway`) — see [`dockerfile-organization.md`](./dockerfile-organization.md) for why this is a separate image rather than a combined build, and [`container-image-frontend.md`](./container-image-frontend.md) for the frontend image's own spec (`docker/Dockerfile.app`).
 
 ## TLS: Kestrel terminates it directly
 
@@ -74,10 +74,10 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:<digest> AS runtime
 
 ## Multi-arch: `linux/amd64` + `linux/arm64`
 
-**Decided: build and push both architectures**, as a single multi-platform manifest list under one tag. Driver: local dev happens on Apple Silicon (arm64), while the home-lab demo cluster's nodes are amd64 — a single-arch `amd64`-only image (what `docker-publish.yml` builds today) means anything run locally on the Mac either needs QEMU emulation (slow, and risky specifically because this project has native SQLite interop) or a separate one-off local build that isn't the same image being shipped. Multi-arch removes that gap: the exact manifest pushed to Harbor pulls and runs natively on both.
+**Decided: build and push both architectures**, as a single multi-platform manifest list under one tag. Driver: local dev happens on Apple Silicon (arm64), while the home-lab demo cluster's nodes are amd64 — a single-arch `amd64`-only image (what `backend-ci.yml` builds today) means anything run locally on the Mac either needs QEMU emulation (slow, and risky specifically because this project has native SQLite interop) or a separate one-off local build that isn't the same image being shipped. Multi-arch removes that gap: the exact manifest pushed to Harbor pulls and runs natively on both.
 
 - **This is local-dev convenience, not a cluster requirement** — the home-lab nodes are amd64-only as far as currently known, so `arm64` isn't load-bearing for the actual demo deployment. It's still built and pushed because the alternative (Mac-only emulated testing against a differently-built image) is worse than the small extra CI cost of building both.
-- **CI mechanics:** `docker-publish.yml` gets `docker/setup-qemu-action` (lets the `ubuntu-latest`/amd64 runner cross-build the `arm64` variant) ahead of the existing `docker/setup-buildx-action`, and the `build-push-action` step adds `platforms: linux/amd64,linux/arm64`. `buildx`/`build-push-action` produces one manifest list under the existing tags (`latest`, `${{ github.sha }}`, the semver tag) — Docker/containerd on either architecture pulls the same tag and automatically resolves to the matching platform image, no separate tags per arch needed.
+- **CI mechanics:** `backend-ci.yml` gets `docker/setup-qemu-action` (lets the `ubuntu-latest`/amd64 runner cross-build the `arm64` variant) ahead of the existing `docker/setup-buildx-action`, and the `build-push-action` step adds `platforms: linux/amd64,linux/arm64`. `buildx`/`build-push-action` produces one manifest list under the existing tags (`latest`, `${{ github.sha }}`, the semver tag) — Docker/containerd on either architecture pulls the same tag and automatically resolves to the matching platform image, no separate tags per arch needed.
 - **No Dockerfile changes required for this specific case.** Unlike `garmin-fit-converter`'s `Dockerfile.zwiftDeviceSwitcher` (which pins a single RID via `--platform=$TARGETPLATFORM` and generates an EF Core migrations bundle — an architecture-specific self-contained executable that has to be built per-target), this project's `dotnet publish` is framework-dependent (see above) and doesn't need an RID-specific build step; the same `dotnet publish` invocation works correctly under either target platform via buildx's automatic per-platform build, without needing `$TARGETPLATFORM`/`$BUILDPLATFORM` handling in the Dockerfile itself.
 - **Local multi-arch build/push** (outside CI, e.g. testing before a push): `docker buildx build -f docker/Dockerfile.gateway --platform linux/amd64,linux/arm64 -t docker.thecameraeye.ca/todo-app/todo-app-gateway:local --push .` (a `--push` is required for a true multi-platform build — `--load` only works for a single platform at a time, matching the host).
 - **Digest pinning caveat:** the base-image digest pinning above (`FROM ...@sha256:<digest>`) needs the **manifest-list digest** for the base image, not a single-platform image digest — `docker buildx imagetools inspect mcr.microsoft.com/dotnet/aspnet:10.0` shows the manifest-list digest that resolves correctly per-platform; pinning to a single-platform digest by mistake would pin the whole multi-arch build to one architecture's base image.
@@ -106,7 +106,7 @@ Docker/BuildKit caches each layer and invalidates everything *after* the first c
 
 ### CI cache reuse
 
-`docker-publish.yml` already uses `docker/build-push-action@v6` with `cache-from: type=gha` / `cache-to: type=gha,mode=max` (see `harbor-registry-setup.md`) — BuildKit's GitHub Actions cache backend, which persists layer cache between CI runs, not just within one build. Combined with the layer ordering above, a CI run that only changed application source skips the restore layer entirely rather than re-downloading NuGet packages every push. No changes needed to that workflow for this — it already does the right thing once the Dockerfile's layers are ordered correctly.
+`backend-ci.yml` already uses `docker/build-push-action@v6` with `cache-from: type=gha` / `cache-to: type=gha,mode=max` (see `harbor-registry-setup.md`) — BuildKit's GitHub Actions cache backend, which persists layer cache between CI runs, not just within one build. Combined with the layer ordering above, a CI run that only changed application source skips the restore layer entirely rather than re-downloading NuGet packages every push. No changes needed to that workflow for this — it already does the right thing once the Dockerfile's layers are ordered correctly.
 
 ### `.dockerignore`
 
@@ -114,11 +114,11 @@ Excludes `bin/`, `obj/`, `.git/`, and (once it exists) frontend `node_modules`/`
 
 ### OCI labels
 
-The Dockerfile itself doesn't declare `org.opencontainers.image.version`/`.revision`/`.source` via its own `LABEL` instructions — those are already stamped at build time by `docker-publish.yml`'s `docker/build-push-action@v6` step (`labels:`, see [`versioning.md`](./versioning.md)), which is the layer that actually has the version/commit/source values available (from the `version` job and `github.sha`/`github.repository`). Duplicating them as static `LABEL` lines in the Dockerfile would either be wrong (baked-in placeholder values) or require build-arg plumbing that already exists one layer up — not worth it for this project.
+The Dockerfile itself doesn't declare `org.opencontainers.image.version`/`.revision`/`.source` via its own `LABEL` instructions — those are already stamped at build time by `backend-ci.yml`'s `docker/build-push-action@v6` step (`labels:`, see [`versioning.md`](./versioning.md)), which is the layer that actually has the version/commit/source values available (from the `version` job and `github.sha`/`github.repository`). Duplicating them as static `LABEL` lines in the Dockerfile would either be wrong (baked-in placeholder values) or require build-arg plumbing that already exists one layer up — not worth it for this project.
 
 ### Version stamping (`APP_VERSION`/`APP_COMMIT_SHA`/`APP_BUILD_DATE`)
 
-Distinct from the OCI labels above — those describe the image as a registry artifact, these get baked into the .NET assembly itself so the *running application* can report its own version via `GET /version` (see [`versioning.md#reading-the-version-at-runtime-get-version`](./versioning.md#reading-the-version-at-runtime-get-version)). Three build args in the build stage (`ARG APP_VERSION=0.0.0-dev`, `ARG APP_COMMIT_SHA=unknown`, `ARG APP_BUILD_DATE=unknown`), passed to `dotnet publish` as `/p:Version=${APP_VERSION}` and `/p:InformationalVersion="${APP_VERSION}+${APP_COMMIT_SHA}.${APP_BUILD_DATE}"`. `docker-publish.yml` passes the real values via `build-args:`; a plain local `docker build` with no `--build-arg` falls back to the defaults rather than failing.
+Distinct from the OCI labels above — those describe the image as a registry artifact, these get baked into the .NET assembly itself so the *running application* can report its own version via `GET /version` (see [`versioning.md#reading-the-version-at-runtime-get-version`](./versioning.md#reading-the-version-at-runtime-get-version)). Three build args in the build stage (`ARG APP_VERSION=0.0.0-dev`, `ARG APP_COMMIT_SHA=unknown`, `ARG APP_BUILD_DATE=unknown`), passed to `dotnet publish` as `/p:Version=${APP_VERSION}` and `/p:InformationalVersion="${APP_VERSION}+${APP_COMMIT_SHA}.${APP_BUILD_DATE}"`. `backend-ci.yml` passes the real values via `build-args:`; a plain local `docker build` with no `--build-arg` falls back to the defaults rather than failing.
 
 ## Runtime user
 
@@ -128,7 +128,7 @@ Runs as a **non-root user** in the final image — `mcr.microsoft.com/dotnet/asp
 
 Same pattern as `garmin-fit-converter`'s `Dockerfile.zwiftDeviceSwitcher` — **one `Dockerfile`, not a separate debug Dockerfile**, with a build arg that conditionally layers on remote-debugging tooling. Keeps the debug and production paths from drifting apart (one file, one set of `COPY`/build steps) while still producing a normal, debug-tool-free image by default.
 
-- **`ARG ENABLE_DEBUG=false`** in the runtime stage. Defaults off — the image pushed to Harbor by `docker-publish.yml` never has debug tooling unless explicitly built with the arg set, since that workflow doesn't pass it.
+- **`ARG ENABLE_DEBUG=false`** in the runtime stage. Defaults off — the image pushed to Harbor by `backend-ci.yml` never has debug tooling unless explicitly built with the arg set, since that workflow doesn't pass it.
 - **When `true`:** installs [`vsdbg`](https://aka.ms/getvsdbgsh) (the .NET remote debugger VS/VS Code's "Attach to process over SSH/Docker" flow uses) via Microsoft's install script, plus a small set of diagnostic packages (`procps`, `lsof`, `net-tools`) useful when poking at a running container. When `false`, none of that is installed — the conditional lives inside a single `RUN` so the debug-tooling layer doesn't exist at all in a non-debug build (not just "installed then hidden").
 - **Debug port:** `EXPOSE 4024` (vsdbg's conventional port in this pattern) — `EXPOSE` is metadata only, doesn't bind anything by itself, so it's harmless to always declare it even in non-debug builds.
 - **Entrypoint wrapper:** a small `/app/entrypoint.sh` checks for a marker file dropped only when `ENABLE_DEBUG=true` (e.g. `/tmp/debug_mode`), and if present, forces `ASPNETCORE_ENVIRONMENT=Development`/`DOTNET_ENVIRONMENT=Development` before `exec`'ing the real command — so a debug build also gets Development-mode behavior (Scalar UI, detailed errors) without a separate image variant.
@@ -164,18 +164,18 @@ Not adding a Docker `HEALTHCHECK` instruction in the image itself — K8s livene
 - Entrypoint `exec "$@"` correctness confirmed — PID 1 inside the container is `dotnet`, not the wrapper script; `docker stop` completes in ~0.15s (true graceful shutdown, not a SIGKILL timeout).
 - Production image: 267MB. Debug image: 719MB (the ~450MB delta is `vsdbg` itself, not a cleanup bug).
 
-**Not yet verified** (needs a real push, not just a local build): the multi-arch manifest actually publishing correctly via `docker-publish.yml`'s CI run, and the mounted-secret-file cert password path (the smoke test above used a literal env var for the password since `AddKeyPerFile` wiring in `Program.cs` is still an open item — see below).
+**Not yet verified** (needs a real push, not just a local build): the multi-arch manifest actually publishing correctly via `backend-ci.yml`'s CI run, and the mounted-secret-file cert password path (the smoke test above used a literal env var for the password since `AddKeyPerFile` wiring in `Program.cs` is still an open item — see below).
 
 ## Open Questions / TODO
 
-- Frontend build stage / second image — deferred until `frontend/` exists (see Scope above).
 - `docker-compose.debug.yml` convenience wrapper for the `ENABLE_DEBUG` build — not required, just a nice-to-have if local compose tooling gets added.
-- Verify the multi-arch push actually works end-to-end once `docker-publish.yml` runs for real (local smoke-testing above only covered a single-platform build).
+- Verify the multi-arch push actually works end-to-end once `backend-ci.yml` runs for real (local smoke-testing above only covered a single-platform build).
 
 The three cert/PVC K8s-side items that used to live here (cert password → Kestrel config wiring, Let's Encrypt → mounted `.pfx` conversion/rotation, PVC/StorageClass for `/data`) are tracked in [`outstanding-items.md`](./outstanding-items.md) instead — they're pod-spec/cluster decisions blocked on `deployment.md`'s still-TODO Cluster/Ingress section, not things that block writing the Dockerfile itself. See also that doc for container resource limits and image vulnerability scanning, deferred out of this doc entirely.
 
 ## Related Docs
 
+- [`container-image-frontend.md`](./container-image-frontend.md) — frontend image design (`docker/Dockerfile.app`)
 - [`deployment.md`](./deployment.md) — TLS strategy (dev cert locally / Let's Encrypt for the demo), deployment target, still-TODO cluster/ingress details
 - [`harbor-registry-setup.md`](./harbor-registry-setup.md) — registry/image name, build & push commands
 - [`versioning.md`](./versioning.md) — image tagging scheme, existing OCI label stamping in CI

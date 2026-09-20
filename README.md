@@ -2,7 +2,7 @@
 
 A to-do list application built for the Foci Solutions take-home coding challenge. See [`docs/requirements/requirements.md`](docs/requirements/requirements.md) for the full assignment.
 
-**Status:** Backend CRUD + completion-status endpoints implemented and tested (`TodoApi.Gateway` + `TodoApi.Todos`) — Add, List, View, Update, Delete, and Complete/Incomplete all working end-to-end against SQLite via EF Core. Frontend not yet scaffolded. See [Documentation Map](#documentation-map) below for the full design.
+**Status:** Backend CRUD + completion-status endpoints implemented and tested (`TodoApi.Gateway` + `TodoApi.Todos`) — Add, List, View, Update, Delete, and Complete/Incomplete all working end-to-end against SQLite via EF Core. Frontend scaffolded (Vite + React 19 + Tailwind CSS v4 + Vitest/RTL) but has no routes or features yet — React Router and the generated API client are not wired in. See [Documentation Map](#documentation-map) below for the full design.
 
 ## Stack
 
@@ -19,10 +19,16 @@ See [`docs/architecture/overview-architecture.md`](docs/architecture/overview-ar
 - Build: `dotnet build` from `backend/`
 - Run: `dotnet run --project backend/src/TodoApi.Gateway/` (serves HTTPS-only, per [`docs/infra/deployment.md`](docs/infra/deployment.md); the OpenAPI spec regenerates to `backend/src/TodoApi.Gateway/openapi.json` on every build)
 - Interactive API UI (Development only): `https://localhost:7020/scalar` via [Scalar](https://github.com/scalar/scalar) — raw spec served alongside it at `/openapi/v1.json`. See [`docs/architecture/backend/overview.md#interactive-ui-for-manual-testing`](docs/architecture/backend/overview.md#interactive-ui-for-manual-testing) for why Scalar.
-- **Container:** `docker build -f docker/Dockerfile.gateway -t todo-app-gateway .` from the repo root. `docker build -f docker/Dockerfile.gateway --build-arg ENABLE_DEBUG=true -t todo-app-gateway:debug .` for a variant with `vsdbg` remote debugging. A second image for the frontend (`docker/Dockerfile.app`) is planned once `frontend/` is scaffolded — see [`docs/infra/dockerfile-organization.md`](docs/infra/dockerfile-organization.md). See [`docs/infra/container-image.md`](docs/infra/container-image.md) for the backend image's full design and [`docs/infra/harbor-registry-setup.md`](docs/infra/harbor-registry-setup.md) for pushing to the registry.
-- **Pre-built image (no build needed):** `docker pull docker.thecameraeye.ca/todo-app/todo-app-gateway:latest` — CI publishes here on every push to `main`. The `todo-app` project is public (pull only, no login) specifically so this image is reviewer-accessible without Harbor credentials — see [`docs/infra/harbor-registry-setup.md#project-visibility-public-dedicated-project`](docs/infra/harbor-registry-setup.md#project-visibility-public-dedicated-project).
+- **Container:** `docker build -f docker/Dockerfile.gateway -t todo-app-gateway .` from the repo root. `docker build -f docker/Dockerfile.gateway --build-arg ENABLE_DEBUG=true -t todo-app-gateway:debug .` for a variant with `vsdbg` remote debugging. See [`docs/infra/container-image.md`](docs/infra/container-image.md) for the backend image's full design and [`docs/infra/harbor-registry-setup.md`](docs/infra/harbor-registry-setup.md) for pushing to the registry.
+- **Pre-built image (no build needed):** `docker pull docker.thecameraeye.ca/todo-app/todo-app-gateway:latest` — CI publishes here on every push to `main` that touches `backend/**`. The `todo-app` project is public (pull only, no login) specifically so this image is reviewer-accessible without Harbor credentials — see [`docs/infra/harbor-registry-setup.md#project-visibility-public-dedicated-project`](docs/infra/harbor-registry-setup.md#project-visibility-public-dedicated-project).
 
-**Frontend:** **TODO — not yet available.** Not yet scaffolded. Planned: `npm install && npm run dev` from `frontend/` (Vite dev server).
+**Frontend:** scaffolded, no routes or features yet — nothing to demo in a browser beyond the Vite starter page.
+
+- Install: `npm install` from `frontend/`
+- Run: `npm run dev` from `frontend/` (Vite dev server)
+- Build: `npm run build` from `frontend/`
+- **Container:** `docker build -f docker/Dockerfile.app -t todo-app-web .` from the repo root — Node build stage, nginx (HTTPS-only, same TLS-everywhere convention as the backend) runtime stage. See [`docs/infra/container-image-frontend.md`](docs/infra/container-image-frontend.md) for the full design.
+- **Pre-built image (no build needed):** `docker pull docker.thecameraeye.ca/todo-app/todo-app-web:latest` — CI publishes here on every push to `main` that touches `frontend/**`.
 
 ## Running Tests
 
@@ -33,7 +39,7 @@ See [`docs/architecture/overview-architecture.md`](docs/architecture/overview-ar
 
 Per-layer testing strategy: `RequestValidator` rules, `TodoMapping` methods, and CQRS command/query handlers (mocked `ITodoRepository` via Moq) are unit tested in `TodoApi.Todos.Tests`; each endpoint's full HTTP contract (status codes, response shape, validation ordering) is integration tested in `TodoApi.Gateway.Tests`. Every feature spec under [`docs/features/`](docs/features/) documents its own Tests section following this split.
 
-**Frontend:** **TODO — not yet available.**
+**Frontend:** Vitest + RTL configured (`npm run test` from `frontend/`), but no components or features exist yet to test.
 
 ## Design Choices
 
@@ -109,8 +115,9 @@ This repo's design decisions are documented as they were made, not written up af
 
 **Infrastructure**
 
-- [`docs/infra/dockerfile-organization.md`](docs/infra/dockerfile-organization.md) — `docker/` layout for multiple Dockerfiles, per-service image naming, CI matrix build (optional enhancement)
+- [`docs/infra/dockerfile-organization.md`](docs/infra/dockerfile-organization.md) — `docker/` layout for multiple Dockerfiles, per-service image naming, per-service path-filtered CI (optional enhancement)
 - [`docs/infra/container-image.md`](docs/infra/container-image.md) — backend (`todo-app-gateway`) container image design: Kestrel-terminated TLS, SQLite volume mount, cache-optimized build stages, multi-arch (`linux/amd64`+`linux/arm64`) build, `ENABLE_DEBUG` remote-debugging build arg (optional enhancement)
+- [`docs/infra/container-image-frontend.md`](docs/infra/container-image-frontend.md) — frontend (`todo-app-web`) container image design: Node build stage + nginx runtime stage, nginx-terminated TLS, SPA fallback routing, `version.json` (optional enhancement)
 - [`docs/infra/harbor-registry-setup.md`](docs/infra/harbor-registry-setup.md) — container registry setup, including Harbor's built-in (Trivy) vulnerability scanning (optional enhancement)
 - [`docs/infra/deployment.md`](docs/infra/deployment.md) — deployment target and TLS strategy
 - [`docs/infra/versioning.md`](docs/infra/versioning.md) — semantic version generation and CI wiring

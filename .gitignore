@@ -425,6 +425,9 @@ test-results/
 # Mac bundle stuff
 *.dmg
 *.app
+# ...except our own docker/Dockerfile.app, which just happens to share the
+# extension with macOS .app bundles.
+!docker/Dockerfile.app
 
 # content below from: https://github.com/github/gitignore/blob/master/Global/macOS.gitignore
 # General

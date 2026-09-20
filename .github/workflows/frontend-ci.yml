@@ -1,49 +1,51 @@
-name: Backend CI
+name: Frontend CI
 
 on:
   push:
     branches: [main]
-    paths: ["backend/**", "docker/Dockerfile.gateway"]
+    paths: ["frontend/**", "docker/Dockerfile.app", "docker/nginx.conf"]
   pull_request:
     branches: [main]
-    paths: ["backend/**", "docker/Dockerfile.gateway"]
+    paths: ["frontend/**", "docker/Dockerfile.app", "docker/nginx.conf"]
 
 env:
   HARBOR_REGISTRY: docker.thecameraeye.ca
   HARBOR_PROJECT: todo-app
-  IMAGE: todo-app-gateway
+  IMAGE: todo-app-web
 
 jobs:
   test:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: frontend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          dotnet-version: "10.0.x"
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Restore
-        run: dotnet restore TodoApi.slnx
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
       - name: Build
-        run: dotnet build TodoApi.slnx --no-restore --configuration Release
+        run: npm run build
 
-      # Runs both unit tests (TodoApi.Todos.Tests) and integration tests
-      # (TodoApi.Gateway.Tests) — see CLAUDE.md's Test command. Targeting the
-      # solution explicitly, not a bare `dotnet test`, so both projects run.
       - name: Test
-        run: dotnet test TodoApi.slnx --no-build --configuration Release
+        run: npm run test -- --run
 
-  # Build+push only runs for a real push to main, not PRs — a PR should be
-  # verified, not published. See docs/infra/versioning.md for why this
-  # service generates and tags its own version independently of the
-  # frontend's build-and-push job in frontend-ci.yml.
+  # Build+push only runs for a real push to main, not PRs — mirrors
+  # backend-ci.yml's build-and-push job. This service generates and tags its
+  # own version independently of the backend's — see
+  # docs/infra/versioning.md#per-service-patch-sequences.
   build-and-push:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -58,7 +60,7 @@ jobs:
 
       - name: Generate version
         id: version
-        run: sh scripts/generate-version.sh gateway
+        run: sh scripts/generate-version.sh web
 
       - name: Record build date
         id: build-date
@@ -81,7 +83,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile.gateway
+          file: docker/Dockerfile.app
           platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
