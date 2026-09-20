@@ -29,6 +29,12 @@ RUN npm ci
 # build, so it's kept after the expensive install step above.
 COPY frontend/ .
 
+# orval.config.ts resolves its input as ../backend/src/TodoApi.Gateway/openapi.json
+# relative to frontend/ (the prebuild step runs from WORKDIR /src, which stands in
+# for frontend/ here) — so the committed spec has to land one level up at that same
+# relative path for the container's orval run to find it.
+COPY backend/src/TodoApi.Gateway/openapi.json /backend/src/TodoApi.Gateway/openapi.json
+
 RUN npm run build
 
 # version.json is the static-site equivalent of the backend's GET /version —
