@@ -53,6 +53,11 @@ services:
       # isn't implemented in Program.cs yet).
       ASPNETCORE_Kestrel__Certificates__Default__Password: ${CERT_PASSWORD:?Set CERT_PASSWORD to the backend .pfx password}
       ASPNETCORE_ENVIRONMENT: Development
+      # Defaults to https://localhost:5173 (the npm-run-dev origin) otherwise — see
+      # ConfigureServices.cs#AddFrontendCors. The frontend here runs at :8444, not
+      # :5173, so this must be set or the browser's CORS preflight to the gateway
+      # gets rejected (surfaces in the frontend as a generic "Failed to fetch").
+      Frontend__Origin: https://localhost:8444
     volumes:
       - ./certs:/certs:ro
       - todo-data:/data

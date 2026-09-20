@@ -31,6 +31,11 @@ services:
     environment:
       ASPNETCORE_Kestrel__Certificates__Default__Password: ${CERT_PASSWORD:?Set CERT_PASSWORD to the backend .pfx password}
       ASPNETCORE_ENVIRONMENT: Development
+      # Defaults to https://localhost:5173 (the npm-run-dev origin) otherwise — see
+      # backend/src/TodoApi.Gateway/ConfigureServices.cs#AddFrontendCors. Must match
+      # the frontend's actual origin here (:8444) or the browser's CORS preflight to
+      # the gateway gets rejected (surfaces as a generic "Failed to fetch").
+      Frontend__Origin: https://localhost:8444
     volumes:
       - ./certs:/certs:ro
       - todo-data:/data
