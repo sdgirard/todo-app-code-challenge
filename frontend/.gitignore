@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Local dev HTTPS cert (exported per-developer via `dotnet dev-certs https`)
+certs/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
