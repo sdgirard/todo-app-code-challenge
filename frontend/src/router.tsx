@@ -4,6 +4,7 @@ import { todoListLoader } from './routes/TodoListRoute.loader'
 import { todoListAction } from './routes/TodoListRoute.action'
 import { TodoDetailRoute } from './routes/TodoDetailRoute'
 import { todoDetailLoader } from './routes/TodoDetailRoute.loader'
+import { todoDetailAction } from './routes/TodoDetailRoute.action'
 import { ErrorBoundary } from './routes/ErrorBoundary'
 
 export const router = createBrowserRouter([
@@ -17,6 +18,7 @@ export const router = createBrowserRouter([
     path: '/todos/:id',
     element: <TodoDetailRoute />,
     loader: todoDetailLoader,
+    action: todoDetailAction,
     errorElement: <ErrorBoundary />,
   },
 ])

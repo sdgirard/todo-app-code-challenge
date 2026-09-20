@@ -32,6 +32,17 @@ export const handlers = [
     return HttpResponse.json(todo)
   }),
 
+  http.delete(`${BASE_URL}/todos/:id`, ({ params }) => {
+    const exists = todos.some((t) => t.id === params.id)
+
+    if (!exists) {
+      return new HttpResponse(null, { status: 404 })
+    }
+
+    todos = todos.filter((t) => t.id !== params.id)
+    return new HttpResponse(null, { status: 204 })
+  }),
+
   http.post(`${BASE_URL}/todos`, async ({ request }) => {
     const body = (await request.json()) as { title?: string }
 
