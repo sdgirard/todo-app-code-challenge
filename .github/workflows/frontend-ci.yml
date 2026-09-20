@@ -3,10 +3,10 @@ name: Frontend CI
 on:
   push:
     branches: [main]
-    paths: ["frontend/**", "docker/Dockerfile.app", "docker/nginx.conf"]
+    paths: ["frontend/**", "docker/Dockerfile.app", "docker/nginx.conf", "docker/docker-entrypoint.sh", "docker/env-config.js.template"]
   pull_request:
     branches: [main]
-    paths: ["frontend/**", "docker/Dockerfile.app", "docker/nginx.conf"]
+    paths: ["frontend/**", "docker/Dockerfile.app", "docker/nginx.conf", "docker/docker-entrypoint.sh", "docker/env-config.js.template"]
 
 env:
   HARBOR_REGISTRY: docker.thecameraeye.ca
