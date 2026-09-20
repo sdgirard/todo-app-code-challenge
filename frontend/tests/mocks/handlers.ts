@@ -22,6 +22,16 @@ export const resetTodos = () => {
 export const handlers = [
   http.get(`${BASE_URL}/todos`, () => HttpResponse.json(todos)),
 
+  http.get(`${BASE_URL}/todos/:id`, ({ params }) => {
+    const todo = todos.find((t) => t.id === params.id)
+
+    if (!todo) {
+      return new HttpResponse(null, { status: 404 })
+    }
+
+    return HttpResponse.json(todo)
+  }),
+
   http.post(`${BASE_URL}/todos`, async ({ request }) => {
     const body = (await request.json()) as { title?: string }
 
