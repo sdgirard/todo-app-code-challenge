@@ -49,7 +49,14 @@ Full rationale for every architectural decision lives under [`docs/`](docs/) —
 - **Error responses:** RFC 9457 Problem Details, ASP.NET Core's built-in convention — no custom error DTO.
 - **API contract:** OpenAPI spec generated at build time from endpoint metadata, committed to the repo, consumed by a generated TypeScript client (orval) on the frontend side. No hand-written API client. **Scalar** provides the interactive UI for manually exercising the API in Development (Swagger UI's replacement now that it's out of the default .NET template).
 
-**Frontend architecture:** doc not yet written — see [Documentation Map](#documentation-map).
+**Frontend architecture** ([`docs/architecture/frontend/overview.md`](docs/architecture/frontend/overview.md)):
+
+- **React Router's data APIs (loaders/actions) are the data layer** — no separate state-management or data-fetching library (e.g. TanStack Query). A route's loader fetches its data, its action handles mutations, and the router re-runs the loader after an action so the list refreshes itself with no manual cache invalidation. Chosen because it's a capability of a dependency already committed to, not a new one to learn/explain for a six-endpoint CRUD app.
+- **Two routes cover all seven requirement-level operations** — `/` (List, Add) and `/todos/:id` (View, Update, Complete/Incomplete, Delete), the same Complete/Incomplete-collapsing precedent the backend already set for its own endpoint. A route with more than one kind of mutation dispatches by an `intent` field in the submitted form data rather than growing extra routes or actions.
+- **Tailwind CSS, no component library** — Ant Design and MUI were both considered and ruled out as more dependency than a list/form/button UI needs, especially given the requirements explicitly de-emphasize visual polish.
+- **Generated API client only** — orval generates a typed client from the backend's committed `openapi.json` as a frontend pre-build step; loaders/actions call it directly, no hand-written `fetch` calls.
+- **Testing:** Vitest + React Testing Library, with MSW mocking HTTP calls at the network layer — the frontend equivalent of the backend's `Mock<ITodoRepository>` boundary. Route-level RTL+MSW tests exercise the full loader → render → action cycle, the closest frontend analogue to the backend's `WebApplicationFactory` integration tests. No Playwright/E2E, ruled out for this project's time budget.
+- **Local dev runs the Vite server over HTTPS too** (`https://localhost:5173`, same dev cert as the backend) — TLS-everywhere applies to the frontend dev server, not just the API. This is also the origin the backend's CORS policy allows, resolving a placeholder the backend's Add Todo spec had left open.
 
 **Testing strategy:** per-layer — validators, mapping, and CQRS handlers unit tested with mocked (Moq) dependencies in `TodoApi.Todos.Tests`; each endpoint's full HTTP contract integration tested via `WebApplicationFactory` (with `ITodoRepository` mocked, real EF Core/SQLite migrations applied at startup) in `TodoApi.Gateway.Tests`. See [Running Tests](#running-tests) above.
 
@@ -85,6 +92,7 @@ This repo's design decisions are documented as they were made, not written up af
 - [`docs/architecture/backend/overview.md`](docs/architecture/backend/overview.md) — backend design: directory structure, endpoint pattern, mapping, bootstrapping, persistence, n-tier layering, error contract
 - [`docs/architecture/backend/cqrs.md`](docs/architecture/backend/cqrs.md) — CQRS without a mediator library
 - [`docs/architecture/authentication.md`](docs/architecture/authentication.md) — rough notes on optional multi-user/auth
+- [`docs/architecture/frontend/overview.md`](docs/architecture/frontend/overview.md) — frontend design: routing/data layer, styling, generated-client integration, testing strategy
 
 **Standards**
 

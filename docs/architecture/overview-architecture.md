@@ -23,7 +23,7 @@ graph TB
     API --> Store
 ```
 
-- **React SPA** — Vite-built React app using React Router's data APIs (loaders/actions) for routing and data fetching. Owns presentation only; no business logic beyond client-side validation feedback.
+- **React SPA** — Vite-built React app using React Router's data APIs (loaders/actions) for routing and data fetching. Owns presentation only; no business logic beyond client-side validation feedback. See [`frontend/overview.md`](./frontend/overview.md) for the full design.
 - **ASP.NET Core Minimal API** — Owns the to-do domain model, request validation, and status codes/error contract. Exposes REST endpoints under `/todos`.
 - **Persistence** — EF Core + SQLite behind a repository interface (`ITodoRepository`), a deliberate choice beyond the requirements doc's "file-based or in-memory is sufficient" minimum, made to demonstrate real ORM usage. See [`backend/overview.md#persistence`](./backend/overview.md#persistence) for the full decision and what was ruled out.
 
@@ -77,5 +77,5 @@ todo-app-code-challenge/
 - [`../requirements/requirements-qa.md`](../requirements/requirements-qa.md) — open questions sent to Foci, including multi-user/auth
 - [`../infra/harbor-registry-setup.md`](../infra/harbor-registry-setup.md) — Harbor registry setup, if containerization happens
 - [`backend/overview.md`](./backend/overview.md) — backend design (Minimal API + CQRS), directory structure (Gateway + feature-library modular monolith)
-- Frontend architecture doc — TBD
+- [`frontend/overview.md`](./frontend/overview.md) — frontend design: React Router data APIs (loaders/actions) as the data layer, no state-management library, Tailwind CSS, generated-client integration, Vitest + RTL + MSW testing
 - Feature-level docs — TBD, one per feature as implemented
