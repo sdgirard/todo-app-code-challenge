@@ -2,7 +2,7 @@
 
 A to-do list application built for the Foci Solutions take-home coding challenge. See [`docs/requirements/requirements.md`](docs/requirements/requirements.md) for the full assignment.
 
-**Status:** Backend CRUD + completion-status endpoints implemented and tested (`TodoApi.Gateway` + `TodoApi.Todos`) — Add, List, View, Update, Delete, and Complete/Incomplete all working end-to-end against SQLite via EF Core. Frontend scaffolded (Vite + React 19 + Tailwind CSS v4 + Vitest/RTL) but has no routes or features yet — React Router and the generated API client are not wired in. See [Documentation Map](#documentation-map) below for the full design.
+**Status:** Feature-complete end to end. Backend CRUD + completion-status endpoints implemented and tested (`TodoApi.Gateway` + `TodoApi.Todos`) — Add, List, View, Update, Delete, and Complete/Incomplete all working against SQLite via EF Core. Frontend (Vite + React 19 + React Router + Tailwind CSS v4) implements all seven requirement-level operations across two routes, backed by an orval-generated TypeScript client and tested with Vitest/RTL/MSW. See [Documentation Map](#documentation-map) below for the full design.
 
 ## Stack
 
@@ -22,11 +22,12 @@ See [`docs/architecture/overview-architecture.md`](docs/architecture/overview-ar
 - **Container:** `docker build -f docker/Dockerfile.gateway -t todo-app-gateway .` from the repo root. `docker build -f docker/Dockerfile.gateway --build-arg ENABLE_DEBUG=true -t todo-app-gateway:debug .` for a variant with `vsdbg` remote debugging. See [`docs/infra/container-image.md`](docs/infra/container-image.md) for the backend image's full design and [`docs/infra/harbor-registry-setup.md`](docs/infra/harbor-registry-setup.md) for pushing to the registry.
 - **Pre-built image (no build needed):** `docker pull docker.thecameraeye.ca/todo-app/todo-app-gateway:latest` — CI publishes here on every push to `main` that touches `backend/**`. The `todo-app` project is public (pull only, no login) specifically so this image is reviewer-accessible without Harbor credentials — see [`docs/infra/harbor-registry-setup.md#project-visibility-public-dedicated-project`](docs/infra/harbor-registry-setup.md#project-visibility-public-dedicated-project).
 
-**Frontend:** scaffolded, no routes or features yet — nothing to demo in a browser beyond the Vite starter page.
+**Frontend:** two routes cover all seven requirement-level operations — `/` (List, Add) and `/todos/:id` (View, Update, Complete/Incomplete, Delete). Requires the backend running locally first (see above) so `predev`/`prebuild` can generate the API client from its `openapi.json`.
 
 - Install: `npm install` from `frontend/`
-- Run: `npm run dev` from `frontend/` (Vite dev server)
-- Build: `npm run build` from `frontend/`
+- Run: `npm run dev` from `frontend/` (Vite dev server, `https://localhost:5173`; `predev` runs orval automatically first — see [API Contract & Client Generation](#documentation-map))
+- Build: `npm run build` from `frontend/` (`prebuild` regenerates the API client, then `tsc -b && vite build`)
+- Lint: `npm run lint` from `frontend/` (oxlint)
 - **Container:** `docker build -f docker/Dockerfile.app -t todo-app-web .` from the repo root — Node build stage, nginx (HTTPS-only, same TLS-everywhere convention as the backend) runtime stage. See [`docs/infra/container-image-frontend.md`](docs/infra/container-image-frontend.md) for the full design.
 - **Pre-built image (no build needed):** `docker pull docker.thecameraeye.ca/todo-app/todo-app-web:latest` — CI publishes here on every push to `main` that touches `frontend/**`.
 
@@ -39,7 +40,11 @@ See [`docs/architecture/overview-architecture.md`](docs/architecture/overview-ar
 
 Per-layer testing strategy: `RequestValidator` rules, `TodoMapping` methods, and CQRS command/query handlers (mocked `ITodoRepository` via Moq) are unit tested in `TodoApi.Todos.Tests`; each endpoint's full HTTP contract (status codes, response shape, validation ordering) is integration tested in `TodoApi.Gateway.Tests`. Every feature spec under [`docs/features/`](docs/features/) documents its own Tests section following this split.
 
-**Frontend:** Vitest + RTL configured (`npm run test` from `frontend/`), but no components or features exist yet to test.
+**Frontend:** Vitest + React Testing Library + MSW, 56 tests across 7 files, all passing.
+
+- Run: `npm run test` from `frontend/`
+
+Mirrors the backend's per-layer split: `lib/problemDetails.ts` is unit tested directly; `components/*` (`TodoList`, `TodoForm`, `TodoDetail`, `ConfirmDialog`) are tested in isolation with RTL; `routes/*` (`TodoListRoute`, `TodoDetailRoute`) are tested end-to-end within the test process — loader → render → user interaction → action → re-render — via `createMemoryRouter` with MSW stubbing the generated client's HTTP calls at the network layer, the closest frontend analogue to the backend's `WebApplicationFactory` integration tests.
 
 ## Design Choices
 

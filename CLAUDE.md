@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 To-do list application built for the Foci Solutions take-home coding challenge. See [`docs/requirements/requirements.md`](docs/requirements/requirements.md) for the full assignment.
 
-Stack: ASP.NET Core Minimal API backend (.NET 10), React (Vite) + React Router frontend. Backend lives under `backend/` (`TodoApi.Gateway` host + `TodoApi.Todos` feature library, plus test projects) — all six feature endpoints implemented (`POST /todos`, `GET /todos`, `GET /todos/{id}`, `PUT /todos/{id}`, `PATCH /todos/{id}`, `DELETE /todos/{id}`). Frontend is scaffolded under `frontend/` (Vite + React 19 + Tailwind CSS v4 + Vitest/RTL) but has no routes or features yet — React Router and the generated API client (orval) are not wired in.
+Stack: ASP.NET Core Minimal API backend (.NET 10), React (Vite) + React Router frontend. Backend lives under `backend/` (`TodoApi.Gateway` host + `TodoApi.Todos` feature library, plus test projects) — all six feature endpoints implemented (`POST /todos`, `GET /todos`, `GET /todos/{id}`, `PUT /todos/{id}`, `PATCH /todos/{id}`, `DELETE /todos/{id}`). Frontend lives under `frontend/` (Vite + React 19 + React Router + Tailwind CSS v4 + Vitest/RTL/MSW) and is feature-complete — two routes (`/` and `/todos/:id`) cover all seven requirement-level operations (Add, List, View, Update, Complete, Incomplete, Delete), backed by an orval-generated TypeScript client (`src/api/generated/`, regenerated automatically via `predev`/`prebuild`).
 
 ## Backend Build/Test Commands
 
@@ -25,7 +25,7 @@ All projects build with `TreatWarningsAsErrors` (set in `backend/Directory.Build
 - Lint: `npm run lint` from `frontend/` (oxlint)
 - Test: `npm run test` from `frontend/` (Vitest)
 
-No routes, features, or generated API client exist yet — the app is still the Vite scaffold (`App.tsx`, `main.tsx`, `index.css`). The orval pre-build generation step described in [Architecture Notes](#architecture-notes) below is not wired in yet.
+Two routes (`TodoListRoute`, `TodoDetailRoute`) cover all seven requirement-level operations; the orval pre-build generation step described in [Architecture Notes](#architecture-notes) below is wired in via `predev`/`prebuild` npm scripts.
 
 ## Keep README.md in Sync
 
