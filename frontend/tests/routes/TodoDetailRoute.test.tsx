@@ -123,4 +123,47 @@ describe('TodoDetailRoute', () => {
       expect(screen.getByText('List page')).toBeInTheDocument()
     })
   })
+
+  it('shows a Complete button for an incomplete todo and toggles it to Incomplete', async () => {
+    const user = userEvent.setup()
+
+    renderRoute(sampleTodo.id)
+    await screen.findByText(sampleTodo.title)
+
+    expect(screen.getByRole('button', { name: 'Complete' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Complete' }))
+
+    expect(await screen.findByRole('button', { name: 'Incomplete' })).toBeInTheDocument()
+    expect(screen.getByText('Completed')).toBeInTheDocument()
+  })
+
+  it('toggles a completed todo back to incomplete', async () => {
+    const user = userEvent.setup()
+
+    renderRoute(sampleTodo.id)
+    await screen.findByText(sampleTodo.title)
+
+    await user.click(screen.getByRole('button', { name: 'Complete' }))
+    expect(await screen.findByRole('button', { name: 'Incomplete' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Incomplete' }))
+
+    expect(await screen.findByRole('button', { name: 'Complete' })).toBeInTheDocument()
+    expect(screen.getByText('Incomplete')).toBeInTheDocument()
+  })
+
+  it('navigates back to the list if the todo was already deleted before toggling (404 race)', async () => {
+    const user = userEvent.setup()
+    server.use(http.patch(`${BASE_URL}/todos/:id`, () => new HttpResponse(null, { status: 404 })))
+
+    renderRoute(sampleTodo.id)
+    await screen.findByText(sampleTodo.title)
+
+    await user.click(screen.getByRole('button', { name: 'Complete' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('List page')).toBeInTheDocument()
+    })
+  })
 })

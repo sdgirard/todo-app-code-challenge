@@ -43,6 +43,24 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 })
   }),
 
+  http.patch(`${BASE_URL}/todos/:id`, async ({ params, request }) => {
+    const index = todos.findIndex((t) => t.id === params.id)
+
+    if (index === -1) {
+      return new HttpResponse(null, { status: 404 })
+    }
+
+    const body = (await request.json()) as { isCompleted: boolean }
+    const updated: TodoResponse = {
+      ...todos[index],
+      isCompleted: body.isCompleted,
+      updatedAt: new Date().toISOString(),
+    }
+    todos = todos.map((t) => (t.id === params.id ? updated : t))
+
+    return HttpResponse.json(updated)
+  }),
+
   http.post(`${BASE_URL}/todos`, async ({ request }) => {
     const body = (await request.json()) as { title?: string }
 
