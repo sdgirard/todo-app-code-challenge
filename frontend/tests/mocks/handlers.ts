@@ -43,6 +43,44 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 })
   }),
 
+  http.put(`${BASE_URL}/todos/:id`, async ({ params, request }) => {
+    const index = todos.findIndex((t) => t.id === params.id)
+
+    if (index === -1) {
+      return new HttpResponse(null, { status: 404 })
+    }
+
+    const body = (await request.json()) as {
+      title?: string
+      description?: string | null
+      dueDate?: string | null
+      isCompleted?: boolean
+    }
+
+    if (!body.title) {
+      return HttpResponse.json(
+        {
+          title: 'One or more validation errors occurred.',
+          status: 400,
+          errors: { Title: ["'Title' must not be empty."] },
+        },
+        { status: 400 },
+      )
+    }
+
+    const updated: TodoResponse = {
+      ...todos[index],
+      title: body.title,
+      description: body.description ?? null,
+      dueDate: body.dueDate ?? null,
+      isCompleted: body.isCompleted ?? todos[index].isCompleted,
+      updatedAt: new Date().toISOString(),
+    }
+    todos = todos.map((t) => (t.id === params.id ? updated : t))
+
+    return HttpResponse.json(updated)
+  }),
+
   http.patch(`${BASE_URL}/todos/:id`, async ({ params, request }) => {
     const index = todos.findIndex((t) => t.id === params.id)
 

@@ -166,4 +166,111 @@ describe('TodoDetailRoute', () => {
       expect(screen.getByText('List page')).toBeInTheDocument()
     })
   })
+
+  it('shows the pre-filled edit form and hides Delete/toggle when Edit is clicked', async () => {
+    const user = userEvent.setup()
+
+    renderRoute(sampleTodo.id)
+    await screen.findByText(sampleTodo.title)
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+
+    expect(screen.getByLabelText('Title')).toHaveValue(sampleTodo.title)
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Complete' })).not.toBeInTheDocument()
+  })
+
+  it('hides the back-to-list link while editing, leaving Cancel as the only way back', async () => {
+    const user = userEvent.setup()
+
+    renderRoute(sampleTodo.id)
+    await screen.findByText(sampleTodo.title)
+    expect(screen.getByRole('link', { name: /back to list/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+
+    expect(screen.queryByRole('link', { name: /back to list/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+  })
+
+  it('returns to the read-only view with original values when Cancel is clicked, without submitting', async () => {
+    const user = userEvent.setup()
+    let putCalls = 0
+    server.use(
+      http.put(`${BASE_URL}/todos/:id`, () => {
+        putCalls += 1
+        return HttpResponse.json(sampleTodo)
+      }),
+    )
+
+    renderRoute(sampleTodo.id)
+    await screen.findByText(sampleTodo.title)
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    await user.type(screen.getByLabelText('Title'), '!')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.getByText(sampleTodo.title)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+    expect(putCalls).toBe(0)
+  })
+
+  it('saves an edited title and returns to the read-only view showing the new value', async () => {
+    const user = userEvent.setup()
+
+    renderRoute(sampleTodo.id)
+    await screen.findByText(sampleTodo.title)
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    const titleInput = screen.getByLabelText('Title')
+    await user.clear(titleInput)
+    await user.type(titleInput, 'Buy oat milk')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Buy oat milk')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+  })
+
+  it('keeps the form open and shows a field error when the server rejects the edit (400)', async () => {
+    const user = userEvent.setup()
+    server.use(
+      http.put(`${BASE_URL}/todos/:id`, () =>
+        HttpResponse.json(
+          {
+            title: 'One or more validation errors occurred.',
+            status: 400,
+            errors: { Title: ["'Title' must not be empty."] },
+          },
+          { status: 400 },
+        ),
+      ),
+    )
+
+    renderRoute(sampleTodo.id)
+    await screen.findByText(sampleTodo.title)
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    await user.type(screen.getByLabelText('Title'), '!')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText("'Title' must not be empty.")).toBeInTheDocument()
+    expect(screen.getByLabelText('Title')).toBeInTheDocument()
+  })
+
+  it('navigates back to the list if the todo was already deleted before saving (404 race)', async () => {
+    const user = userEvent.setup()
+    server.use(http.put(`${BASE_URL}/todos/:id`, () => new HttpResponse(null, { status: 404 })))
+
+    renderRoute(sampleTodo.id)
+    await screen.findByText(sampleTodo.title)
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    const titleInput = screen.getByLabelText('Title')
+    await user.type(titleInput, '!')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('List page')).toBeInTheDocument()
+    })
+  })
 })
