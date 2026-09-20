@@ -1,5 +1,6 @@
 import { redirect, type ActionFunctionArgs } from 'react-router'
 import { deleteTodo, updateCompletionStatus, updateTodo } from '../api/generated/todos/todos'
+import { fromDateTimeLocal } from '../lib/dateTimeLocal'
 import { getFieldErrors, getMessage } from '../lib/problemDetails'
 
 export interface TodoDetailActionData {
@@ -47,7 +48,7 @@ export const todoDetailAction = async ({
     const result = await updateTodo(id, {
       title,
       description: description ? String(description) : null,
-      dueDate: dueDate ? String(dueDate) : null,
+      dueDate: dueDate ? fromDateTimeLocal(String(dueDate)) : null,
       isCompleted,
     })
     const status: number = result.status

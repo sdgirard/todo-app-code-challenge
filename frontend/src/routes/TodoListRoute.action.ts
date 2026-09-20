@@ -1,5 +1,6 @@
 import { redirect, type ActionFunctionArgs } from 'react-router'
 import { addTodo } from '../api/generated/todos/todos'
+import { fromDateTimeLocal } from '../lib/dateTimeLocal'
 import { getFieldErrors, getMessage } from '../lib/problemDetails'
 
 export interface TodoListActionData {
@@ -19,7 +20,7 @@ export const todoListAction = async ({
   const result = await addTodo({
     title,
     description: description ? String(description) : null,
-    dueDate: dueDate ? String(dueDate) : null,
+    dueDate: dueDate ? fromDateTimeLocal(String(dueDate)) : null,
   })
 
   if (result.status === 201) {

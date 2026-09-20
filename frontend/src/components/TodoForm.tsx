@@ -1,6 +1,7 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { Form } from 'react-router'
 import type { TodoResponse } from '../api/generated/models'
+import { toDateTimeLocal } from '../lib/dateTimeLocal'
 
 const TITLE_MAX_LENGTH = 200
 const DESCRIPTION_MAX_LENGTH = 2000
@@ -23,17 +24,6 @@ interface TodoFormProps {
 }
 
 const DEFAULT_VALUES: TodoFormValues = { title: '', description: '', dueDate: '' }
-
-// Converts an ISO 8601 dueDate (or null) into the local-time string shape
-// <input type="datetime-local"> produces/accepts (e.g. "2026-09-26T14:30"),
-// so it can serve as both the input's initial value and the dirty-tracking baseline.
-const toDateTimeLocal = (value: string | null): string => {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
 
 const valuesFromTodo = (todo: TodoResponse): TodoFormValues => ({
   title: todo.title,
